@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Details - CAUSA</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body>
+    <!-- Fixed Header -->
+    <header class="dashboard-header">
+        <div class="header-content">
+            <div class="header-left">
+                <a href="/dashboard" class="back-link">
+                    ← Back to Dashboard
+                </a>
+            </div>
+            <div class="header-right">
+                <button onclick="window.location.reload()" class="btn btn-primary">
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard-container" x-data="{ evidenceExpanded: false, logsExpanded: false }">
+        <!-- Analysis Header -->
+        <section class="analysis-header-section">
+            <h1 class="page-title">
+                <span>Analysis Details</span>
+            </h1>
+            
+            <div class="analysis-meta-grid">
+                <div class="meta-card">
+                    <div class="meta-label">Status</div>
+                    <div class="status-badge {session.status.cssClass} large">
+                        <span>{session.status.displayName}</span>
+                    </div>
+                </div>
+                
+                <div class="meta-card">
+                    <div class="meta-label">Started</div>
+                    <div class="meta-value">{session.formattedTimestamp}</div>
+                </div>
+                
+                <div class="meta-card">
+                    <div class="meta-label">Duration</div>
+                    <div class="meta-value">{session.formattedDuration}</div>
+                </div>
+            </div>
+
+            {#if session.isInProgress()}
+            <div class="progress-section">
+                <div class="progress-label">{session.currentStep}</div>
+                <div class="progress-bar large">
+                    <div class="progress-fill" style="width: {session.progressPercent}%"></div>
+                </div>
+                <div class="progress-text">{session.progressPercent}% Complete</div>
+            </div>
+            {/if}
+        </section>
+
+        <!-- Error Information (if failed) -->
+        {#if session.status.name() == 'FAILED' && session.errorMessage}
+        <section class="details-section error-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Error Details</span>
+                </h2>
+            </div>
+            <div class="error-content">
+                <pre>{session.errorMessage}</pre>
+            </div>
+        </section>
+        {/if}
+
+        <!-- Stage Timing Information (only for successful analyses) -->
+        {#if session.stageTiming && !session.stageTiming.isEmpty() && (session.status.name() == 'COMPLETED' || session.status.name() == 'HEALTHY')}
+        <section class="stage-timing-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Stage Performance</span>
+                </h2>
+            </div>
+            <div class="timing-grid">
+                {#if session.stageTiming.containsKey('data_collection')}
+                <div class="timing-card">
+                    <div class="timing-stage">Data Collection</div>
+                    <div class="timing-duration">{session.getFormattedStageDuration('data_collection')}</div>
+                </div>
+                {/if}
+                {#if session.stageTiming.containsKey('anomaly_detection')}
+                <div class="timing-card">
+                    <div class="timing-stage">Anomaly Detection</div>
+                    <div class="timing-duration">{session.getFormattedStageDuration('anomaly_detection')}</div>
+                </div>
+                {/if}
+                {#if session.stageTiming.containsKey('rca_analysis')}
+                <div class="timing-card">
+                    <div class="timing-stage">RCA Analysis</div>
+                    <div class="timing-duration">{session.getFormattedStageDuration('rca_analysis')}</div>
+                </div>
+                {/if}
+                {#if session.stageTiming.containsKey('validation')}
+                <div class="timing-card">
+                    <div class="timing-stage">Validation</div>
+                    <div class="timing-duration">{session.getFormattedStageDuration('validation')}</div>
+                </div>
+                {/if}
+            </div>
+        </section>
+        {/if}
+
+        <!-- Pod Information -->
+        <section class="details-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Pod Information</span>
+                </h2>
+            </div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Namespace</div>
+                    <div class="info-value">{session.namespace}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Pod Name</div>
+                    <div class="info-value">{session.podName}</div>
+                </div>
+            </div>
+        </section>
+
+        {#if session.report}
+        <!-- Issue -->
+        <section class="details-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Issue Detected</span>
+                </h2>
+            </div>
+            <div class="content-box">
+                <h3 class="issue-title">{session.report.title}</h3>
+                <div class="issue-description">{session.report.issue}</div>
+            </div>
+        </section>
+
+        <!-- Evidence -->
+        <section class="details-section">
+            <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
+                <h2 class="section-title">
+                    <span>Evidence</span>
+                </h2>
+                <span class="expand-icon" x-text="evidenceExpanded ? '▲' : '▼'">▼</span>
+            </div>
+            <div class="content-box" x-show="evidenceExpanded" x-collapse>
+                <div class="evidence-content">{session.report.evidence}</div>
+            </div>
+        </section>
+
+        <!-- Supported Logs -->
+        {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
+        <section class="details-section">
+            <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
+                <h2 class="section-title">
+                    <span>Supported Logs</span>
+                </h2>
+                <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▼</span>
+            </div>
+            <div class="content-box logs-box" x-show="logsExpanded" x-collapse>
+                <div class="logs-content">
+                    {#for log in session.report.supportedLogs}
+                    <div class="log-entry">
+                        <span class="log-bullet">•</span>
+                        <span class="log-text">{log}</span>
+                    </div>
+                    {/for}
+                </div>
+            </div>
+        </section>
+        {/if}
+
+        <!-- Proposed Solution (if enabled) -->
+        {#if showProposedSolution && session.report.proposedSolution}
+        <section class="details-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Proposed Solution</span>
+                </h2>
+            </div>
+            <div class="content-box solution-box">
+                <div class="solution-content">{session.report.proposedSolution}</div>
+            </div>
+        </section>
+        {/if}
+        {/if}
+
+        <!-- Session Info -->
+        <section class="details-section session-info">
+            <div class="info-footer">
+                <div class="info-item">
+                    <span class="info-label">Session ID:</span>
+                    <span class="info-value mono">{session.sessionId}</span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAUSA - RCA Dashboard</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    <!-- jQuery (required for DataTables) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+</head>
+<body>
+    <!-- Fixed Header -->
+    <header class="dashboard-header">
+        <div class="header-content">
+            <button id="sidebarToggle" class="sidebar-toggle" title="Toggle Sidebar">
+                <span class="toggle-icon">☰</span>
+            </button>
+            <div class="header-left">
+                <img src="/logo.png" alt="CAUSA Logo" class="header-logo">
+                <div class="header-branding">
+                    <h1 class="dashboard-title">CAUSA</h1>
+                    <p class="dashboard-subtitle">Root Cause Analysis Dashboard</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <button onclick="window.location.reload()" class="btn btn-primary">
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="dashboard-layout">
+        <!-- Vertical Navigation Tabs -->
+        <nav class="vertical-tabs" id="sidebar">
+            <button class="tab-button active" data-tab="dashboard">
+                <span class="tab-icon">📊</span>
+                <span class="tab-label">Dashboard</span>
+            </button>
+            <button class="tab-button" data-tab="workloads">
+                <span class="tab-icon">⚙️</span>
+                <span class="tab-label">Workloads</span>
+            </button>
+            <button class="tab-button" data-tab="about">
+                <span class="tab-icon">ℹ️</span>
+                <span class="tab-label">About</span>
+            </button>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="dashboard-content" id="mainContent">
+            <!-- Dashboard Tab -->
+            <div id="dashboard-tab" class="tab-content active">
+                <!-- Statistics Cards -->
+                <section class="stats-section">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-content">
+                                <div class="stat-value">{stats.total}</div>
+                                <div class="stat-label">Total Analyses</div>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-in-progress">
+                            <div class="stat-icon">⟳</div>
+                            <div class="stat-content">
+                                <div class="stat-value">{stats.inProgress}</div>
+                                <div class="stat-label">In Progress</div>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-completed">
+                            <div class="stat-icon">✓</div>
+                            <div class="stat-content">
+                                <div class="stat-value">{stats.completed}</div>
+                                <div class="stat-label">Completed</div>
+                            </div>
+                        </div>
+                        <div class="stat-card stat-failed">
+                            <div class="stat-icon">✗</div>
+                            <div class="stat-content">
+                                <div class="stat-value">{stats.failed}</div>
+                                <div class="stat-label">Failed</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Analyses Table -->
+                <section class="table-section">
+                    <h2 class="section-title">Recent Analyses</h2>
+                    {#if error??}
+                        <div class="error-message">
+                            <span>⚠</span>
+                            <span>{error}</span>
+                        </div>
+                    {/if}
+                    
+                    {#if analyses.isEmpty()}
+                        <div class="empty-state">
+                            <div class="empty-icon">📭</div>
+                            <h3>No Analyses Found</h3>
+                            <p>No RCA analyses have been performed yet.</p>
+                        </div>
+                    {#else}
+                        <div class="table-container">
+                            <table id="analysesTable" class="analyses-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Namespace</th>
+                                        <th>Pod</th>
+                                        <th>Status</th>
+                                        <th>Progress</th>
+                                        <th>Duration</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {#for analysis in analyses}
+                                    <tr class="analysis-row">
+                                        <td class="timestamp-cell" data-order="{analysis.timestamp}">
+                                            <div class="timestamp">{analysis.formattedTimestamp}</div>
+                                        </td>
+                                        <td class="namespace">{analysis.namespace}</td>
+                                        <td class="pod-cell">
+                                            <div class="pod-name">{analysis.podName}</div>
+                                        </td>
+                                        <td class="status-cell">
+                                            <div class="status-badge {analysis.status.cssClass}">
+                                                <span>{analysis.status.displayName}</span>
+                                            </div>
+                                        </td>
+                                        <td class="progress-cell">
+                                            {#if analysis.isInProgress()}
+                                                <div class="progress-bar">
+                                                    <div class="progress-fill" style="width: {analysis.progressPercent}%"></div>
+                                                </div>
+                                                <div class="progress-text">{analysis.progressPercent}%</div>
+                                            {#else if analysis.isCompleted()}
+                                                <div class="progress-bar">
+                                                    <div class="progress-fill" style="width: 100%"></div>
+                                                </div>
+                                                <div class="progress-text">100%</div>
+                                            {#else}
+                                                <span class="text-muted">—</span>
+                                            {/if}
+                                        </td>
+                                        <td class="duration">{analysis.formattedDuration}</td>
+                                        <td class="actions-cell">
+                                            <a href="/dashboard/analysis/{analysis.sessionId}" class="btn btn-small btn-view">
+                                                View
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {/for}
+                                </tbody>
+                            </table>
+                        </div>
+                    {/if}
+                </section>
+            </div>
+
+            <!-- Workloads Tab -->
+            <div id="workloads-tab" class="tab-content">
+                <section class="table-section">
+                    <h2 class="section-title">Workloads</h2>
+                    <p class="section-description">
+                        Kubernetes workloads with RCA label. Click "Trigger Analysis" to analyze a specific pod.
+                    </p>
+                    <div class="table-container">
+                        <table id="workloadsTable" class="analyses-table">
+                            <thead>
+                                <tr>
+                                    <th>Namespace</th>
+                                    <th>Pod</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="workloadsTableBody">
+                                <tr>
+                                    <td colspan="3" class="text-center">
+                                        <div class="loading-spinner">Loading workloads...</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- About Tab -->
+            <div id="about-tab" class="tab-content">
+                <section class="about-section">
+                    <div class="about-header">
+                        <img src="/logo.png" alt="CAUSA Logo" class="about-logo">
+                        <h1>CAUSA</h1>
+                        <p class="about-tagline">Intelligent Root Cause Analysis for Kubernetes</p>
+                    </div>
+                    
+                    <div class="about-content">
+                        <div class="about-card">
+                            <h3>🎯 What is CAUSA?</h3>
+                            <p>CAUSA is an advanced Root Cause Analysis (RCA) system designed to automatically detect, analyze, and diagnose issues in Kubernetes workloads. Using AI-powered analysis, CAUSA helps DevOps teams quickly identify and resolve production incidents.</p>
+                        </div>
+
+                        <div class="about-card">
+                            <h3>✨ Key Features</h3>
+                            <ul>
+                                <li>Automated workload scanning and monitoring</li>
+                                <li>AI-powered root cause analysis</li>
+                                <li>Integration with Prometheus alerts</li>
+                                <li>Comprehensive log analysis</li>
+                                <li>Real-time analysis tracking</li>
+                                <li>Actionable remediation suggestions</li>
+                            </ul>
+                        </div>
+
+                        <div class="about-card">
+                            <h3>🚀 Getting Started</h3>
+                            <p>To enable RCA analysis for your workloads, add the following label to your pods:</p>
+                            <code class="code-block">kruize/rca: enabled</code>
+                            <p>CAUSA will automatically scan and analyze labeled workloads based on your configured schedule.</p>
+                        </div>
+
+                        <div class="about-card">
+                            <h3>📚 Documentation</h3>
+                            <p>For detailed documentation, configuration guides, and API references, please visit our GitHub repository.</p>
+                        </div>
+
+                        <div class="about-footer">
+                            <p>Version 1.0.0 | Built with ❤️ for Kubernetes</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
