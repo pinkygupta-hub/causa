@@ -1,7 +1,8 @@
 package com.causa.rca.service;
 
-import com.causa.rca.external.CryostatClient;
-import com.causa.rca.external.PrometheusClient;
+import com.causa.rca.clients.CryostatClient;
+import com.causa.rca.clients.PrometheusClient;
+import com.causa.rca.utils.TokenProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import io.fabric8.kubernetes.client.KubernetesClient;

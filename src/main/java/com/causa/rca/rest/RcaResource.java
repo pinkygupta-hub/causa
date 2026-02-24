@@ -3,6 +3,7 @@ package com.causa.rca.rest;
 import com.causa.rca.model.AlertWebhookRequest;
 import com.causa.rca.model.RcaReport;
 import com.causa.rca.service.RcaOrchestrator;
+import com.causa.rca.service.WebhookManagerService;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
@@ -10,9 +11,6 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -38,6 +36,9 @@ public class RcaResource {
 
     @Inject
     RcaOrchestrator orchestrator;
+
+    @Inject
+    WebhookManagerService webhookManager;
 
     /**
      * Triggers a comprehensive Root Cause Analysis for a specific pod.
@@ -108,84 +109,8 @@ public class RcaResource {
     @POST
     @Path("/webhook")
     public Response handleWebhook(AlertWebhookRequest alertRequest) {
-        LOG.info("Received webhook alert. Status: " + alertRequest.getStatus());
-        
-        if (alertRequest.getAlerts() == null || alertRequest.getAlerts().isEmpty()) {
-            LOG.warn("Webhook received with no alerts");
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(Map.of("error", "No alerts in webhook payload"))
-                    .build();
-        }
-
-        List<Map<String, Object>> results = new ArrayList<>();
-        int processedCount = 0;
-        int skippedCount = 0;
-        int errorCount = 0;
-
-        for (AlertWebhookRequest.Alert alert : alertRequest.getAlerts()) {
-            String namespace = alert.getNamespace();
-            String podName = alert.getPodName();
-            String alertName = alert.getAlertName();
-            String status = alert.getStatus();
-
-            LOG.info("Processing alert: " + alertName + " for pod: " + namespace + "/" + podName + " (status: " + status + ")");
-
-            // Skip resolved alerts or alerts without required information
-            if (!"firing".equalsIgnoreCase(status)) {
-                LOG.info("Skipping non-firing alert: " + alertName);
-                skippedCount++;
-                continue;
-            }
-
-            if (namespace == null || namespace.isEmpty() || podName == null || podName.isEmpty()) {
-                LOG.warn("Alert missing required labels (namespace/pod): " + alertName);
-                results.add(Map.of(
-                    "alert", alertName != null ? alertName : "unknown",
-                    "status", "skipped",
-                    "reason", "Missing namespace or pod labels"
-                ));
-                skippedCount++;
-                continue;
-            }
-
-            try {
-                LOG.info("Triggering RCA analysis for: " + namespace + "/" + podName);
-                RcaReport report = orchestrator.runAnalysis(namespace, podName);
-                
-                Map<String, Object> result = new HashMap<>();
-                result.put("alert", alertName);
-                result.put("namespace", namespace);
-                result.put("pod", podName);
-                result.put("status", "analyzed");
-                result.put("issue", report.issue);
-                result.put("confidence", report.validationConfidence);
-                results.add(result);
-                
-                processedCount++;
-                LOG.info("RCA analysis completed for: " + namespace + "/" + podName);
-            } catch (Exception e) {
-                LOG.error("Error processing alert for pod: " + namespace + "/" + podName, e);
-                results.add(Map.of(
-                    "alert", alertName,
-                    "namespace", namespace,
-                    "pod", podName,
-                    "status", "error",
-                    "error", e.getMessage() != null ? e.getMessage() : "Unknown error"
-                ));
-                errorCount++;
-            }
-        }
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Webhook processed");
-        response.put("totalAlerts", alertRequest.getAlerts().size());
-        response.put("processed", processedCount);
-        response.put("skipped", skippedCount);
-        response.put("errors", errorCount);
-        response.put("results", results);
-
-        LOG.info("Webhook processing complete. Processed: " + processedCount + ", Skipped: " + skippedCount + ", Errors: " + errorCount);
-
-        return Response.ok(response).build();
+        LOG.info("Received webhook request");
+        Map<String, Object> result = webhookManager.processWebhook(alertRequest);
+        return Response.ok(result).build();
     }
 }
