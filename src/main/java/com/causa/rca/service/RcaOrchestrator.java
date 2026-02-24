@@ -1,6 +1,7 @@
 package com.causa.rca.service;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
@@ -8,6 +9,8 @@ import com.causa.rca.ai.AnomalyDetector;
 import com.causa.rca.ai.RootCauseAnalyst;
 import com.causa.rca.ai.ValidationAgent;
 import com.causa.rca.model.RcaReport;
+import com.causa.rca.model.RcaAnalysisSession;
+import com.causa.rca.model.AnalysisStatus;
 
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
@@ -54,8 +57,35 @@ public class RcaOrchestrator {
     @Inject
     ValidationAgent reportValidator;
 
+    @Inject
+    AnalysisTrackingService trackingService;
+
     /**
-     * Executes the complete RCA analysis pipeline for a specific pod.
+     * Starts an asynchronous RCA analysis pipeline for a specific pod.
+     * <p>
+     * This method creates a session and returns immediately with the session information.
+     * The actual analysis runs asynchronously in the background.
+     * </p>
+     *
+     * @param namespace the Kubernetes namespace where the pod is located
+     * @param podName the name of the pod to analyze
+     * @return the created {@link RcaAnalysisSession} with status IN_PROGRESS
+     */
+    public RcaAnalysisSession startAnalysis(String namespace, String podName) {
+        LOG.info("Starting async RCA analysis for: " + namespace + "/" + podName);
+
+        // Create tracking session
+        RcaAnalysisSession session = trackingService.createSession(namespace, podName);
+        String sessionId = session.sessionId;
+        
+        // Run analysis asynchronously
+        runAnalysisAsync(sessionId, namespace, podName);
+        
+        return session;
+    }
+
+    /**
+     * Executes the complete RCA analysis pipeline asynchronously.
      * <p>
      * The analysis proceeds through the following steps:
      * <ol>
@@ -66,55 +96,95 @@ public class RcaOrchestrator {
      *   <li>Validates and formats the analysis into a structured {@link RcaReport}</li>
      * </ol>
      * </p>
-     * <p>
-     * The method includes sanitization of AI outputs to handle potential formatting
-     * inconsistencies and ensures robust error handling throughout the pipeline.
-     * </p>
      *
+     * @param sessionId the session ID for tracking
      * @param namespace the Kubernetes namespace where the pod is located
      * @param podName the name of the pod to analyze
-     * @return a complete {@link RcaReport} containing the analysis results, including
-     *         issue description, evidence, proposed solution, and confidence score
      */
-    public RcaReport runAnalysis(String namespace, String podName) {
-        LOG.info("Starting RCA analysis for: " + namespace + "/" + podName);
+    private void runAnalysisAsync(String sessionId, String namespace, String podName) {
+        // Run in a separate thread to avoid blocking
+        new Thread(() -> {
+            try {
+                runAnalysisInternal(sessionId, namespace, podName);
+            } catch (Exception e) {
+                LOG.error("Error in async analysis for session " + sessionId, e);
+            }
+        }).start();
+    }
 
-        // Step 0: Collect Data
-        Map<String, String> data = dataCollector.getRealDataPackage(namespace, podName);
-        String metricsData = data.get("metrics_data");
-        String fullContext = data.get("full_context");
-        LOG.info("Data collection complete. Metrics summary length: " + (metricsData != null ? metricsData.length() : 0)
-                + ", Full context length: " + (fullContext != null ? fullContext.length() : 0));
+    /**
+     * Internal method that performs the actual RCA analysis.
+     * Uses @ActivateRequestContext to ensure RequestScoped beans work in async thread.
+     * Note: Must be package-private or public for @ActivateRequestContext to work.
+     */
+    @ActivateRequestContext
+    void runAnalysisInternal(String sessionId, String namespace, String podName) {
 
-        // Step 1: Anomaly Detection
-        LOG.info("Step 1: Running Anomaly Detection...");
-        LOG.debug("Context for Anomaly Detection:\n" + fullContext);
-        String rawAnomaly = anomalyDetector.detectAnomaly(fullContext);
-        LOG.info("RAW Anomaly Detector Response: [" + rawAnomaly + "]");
+        try {
+            // Step 0: Collect Data
+            trackingService.recordStageStart(sessionId, "data_collection");
+            trackingService.updateStatus(sessionId, AnalysisStatus.COLLECTING_DATA,
+                "Collecting metrics, logs, and events from Kubernetes");
+            
+            Map<String, String> data = dataCollector.getRealDataPackage(namespace, podName);
+            String metricsData = data.get("metrics_data");
+            String fullContext = data.get("full_context");
+            LOG.info("Data collection complete. Metrics summary length: " + (metricsData != null ? metricsData.length() : 0)
+                    + ", Full context length: " + (fullContext != null ? fullContext.length() : 0));
+            trackingService.recordStageEnd(sessionId, "data_collection");
 
-        // Sanitize LLM output to get the core anomaly type (first line, before any comments)
-        String anomalyType = rawAnomaly.split("\n")[0].split("#")[0].trim();
-        LOG.info("Sanitized Anomaly Type: [" + anomalyType + "]");
+            // Step 1: Anomaly Detection
+            trackingService.recordStageStart(sessionId, "anomaly_detection");
+            trackingService.updateStatus(sessionId, AnalysisStatus.DETECTING_ANOMALY,
+                "Analyzing data to detect anomalies using AI");
+            
+            LOG.info("Step 1: Running Anomaly Detection...");
+            LOG.debug("Context for Anomaly Detection:\n" + fullContext);
+            String rawAnomaly = anomalyDetector.detectAnomaly(fullContext);
+            LOG.info("RAW Anomaly Detector Response: [" + rawAnomaly + "]");
 
-        if (anomalyType.isEmpty() || "HEALTHY".equalsIgnoreCase(anomalyType)
-                || anomalyType.toUpperCase().contains("HEALTHY")) {
-            LOG.info("System is healthy or no anomaly detected. Skipping RCA and Validation.");
-            return new RcaReport("System Healthy", "No anomaly detected", "Metrics within normal range", null,
-                    "No action needed", 1.0);
+            // Sanitize LLM output to get the core anomaly type (first line, before any comments)
+            String anomalyType = rawAnomaly.split("\n")[0].split("#")[0].trim();
+            LOG.info("Sanitized Anomaly Type: [" + anomalyType + "]");
+            trackingService.recordStageEnd(sessionId, "anomaly_detection");
+
+            if (anomalyType.isEmpty() || "HEALTHY".equalsIgnoreCase(anomalyType)
+                    || anomalyType.toUpperCase().contains("HEALTHY")) {
+                LOG.info("System is healthy or no anomaly detected. Skipping RCA and Validation.");
+                RcaReport healthyReport = new RcaReport("System Healthy", "No anomaly detected",
+                    "Metrics within normal range", null, "No action needed", 1.0);
+                trackingService.markHealthy(sessionId, healthyReport);
+                return;
+            }
+
+            // Step 2: Root Cause Analysis
+            trackingService.recordStageStart(sessionId, "rca_analysis");
+            trackingService.updateStatus(sessionId, AnalysisStatus.ANALYZING_RCA,
+                "Performing root cause analysis for detected anomaly: " + anomalyType);
+            
+            LOG.info("Step 2: Running Root Cause Analysis...");
+            LOG.debug("Context for RCA:\n" + fullContext);
+            String rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, fullContext);
+            LOG.info("RAW RCA Result: [" + rcaOutput + "]");
+            trackingService.recordStageEnd(sessionId, "rca_analysis");
+
+            // Step 3: Validation and Formatting
+            trackingService.recordStageStart(sessionId, "validation");
+            trackingService.updateStatus(sessionId, AnalysisStatus.VALIDATING,
+                "Validating and formatting analysis results");
+            
+            LOG.info("Step 3: Running Validation and Formatting...");
+            LOG.debug("Context for Validation:\n" + rcaOutput);
+            RcaReport report = reportValidator.validateAndFormat(rcaOutput, fullContext);
+            LOG.info("Final Report Object: " + report);
+            trackingService.recordStageEnd(sessionId, "validation");
+
+            // Mark as completed
+            trackingService.completeSession(sessionId, report);
+            
+        } catch (Exception e) {
+            LOG.error("Error during RCA analysis for session " + sessionId, e);
+            trackingService.failSession(sessionId, e.getMessage());
         }
-
-        // Step 2: Root Cause Analysis
-        LOG.info("Step 2: Running Root Cause Analysis...");
-        LOG.debug("Context for RCA:\n" + fullContext);
-        String rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, fullContext);
-        LOG.info("RAW RCA Result: [" + rcaOutput + "]");
-
-        // Step 3: Validation and Formatting
-        LOG.info("Step 3: Running Validation and Formatting...");
-        LOG.debug("Context for Validation:\n" + rcaOutput);
-        RcaReport report = reportValidator.validateAndFormat(rcaOutput, fullContext);
-        LOG.info("Final Report Object: " + report);
-
-        return report;
     }
 }

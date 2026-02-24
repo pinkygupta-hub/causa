@@ -29,7 +29,7 @@ import java.util.List;
  * Example label configuration: {@code rca.label=kruize/rca=enabled}
  * </p>
  *
- * @see SchedulerService
+ * @see LifecycleService
  * @see RcaOrchestrator
  */
 @ApplicationScoped
@@ -101,8 +101,8 @@ public class ScannerService {
             
             try {
                 LOG.info(">>> Starting analysis for pod: " + namespace + "/" + podName);
-                var report = rcaOrchestrator.runAnalysis(namespace, podName);
-                LOG.info("<<< Analysis completed for pod: " + podName + ". Issue: " + report.issue);
+                var session = rcaOrchestrator.startAnalysis(namespace, podName);
+                LOG.info("<<< Analysis started for pod: " + podName + ". Session: " + session.sessionId);
                 successCount++;
             } catch (Exception e) {
                 LOG.error("!!! Error analyzing pod " + namespace + "/" + podName, e);
@@ -152,8 +152,8 @@ public class ScannerService {
             
             try {
                 LOG.info(">>> Starting analysis for pod: " + namespace + "/" + podName);
-                var report = rcaOrchestrator.runAnalysis(namespace, podName);
-                LOG.info("<<< Analysis completed for pod: " + podName + ". Issue: " + report.issue);
+                var session = rcaOrchestrator.startAnalysis(namespace, podName);
+                LOG.info("<<< Analysis started for pod: " + podName + ". Session: " + session.sessionId);
                 successCount++;
             } catch (Exception e) {
                 LOG.error("!!! Error analyzing pod " + namespace + "/" + podName, e);
@@ -179,8 +179,8 @@ public class ScannerService {
     public boolean analyzePod(String namespace, String podName) {
         try {
             LOG.info(">>> Starting direct analysis for pod: " + namespace + "/" + podName);
-            var report = rcaOrchestrator.runAnalysis(namespace, podName);
-            LOG.info("<<< Analysis completed for pod: " + podName + ". Issue: " + report.issue);
+            var session = rcaOrchestrator.startAnalysis(namespace, podName);
+            LOG.info("<<< Analysis started for pod: " + podName + ". Session: " + session.sessionId);
             return true;
         } catch (Exception e) {
             LOG.error("!!! Error analyzing pod " + namespace + "/" + podName, e);

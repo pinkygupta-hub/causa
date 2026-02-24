@@ -1,6 +1,7 @@
 package com.causa.rca.service;
 
 import com.causa.rca.model.AlertWebhookRequest;
+import com.causa.rca.model.RcaAnalysisSession;
 import com.causa.rca.model.RcaReport;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -120,13 +121,13 @@ public class WebhookManagerService {
 
             // Process the alert
             try {
-                LOG.info("Triggering RCA analysis for: " + namespace + "/" + podName);
-                RcaReport report = rcaOrchestrator.runAnalysis(namespace, podName);
+                LOG.info("Triggering async RCA analysis for: " + namespace + "/" + podName);
+                RcaAnalysisSession session = rcaOrchestrator.startAnalysis(namespace, podName);
                 
-                results.add(createSuccessResult(alertName, namespace, podName, report));
+                results.add(createSuccessResult(alertName, namespace, podName, session));
                 processedCount++;
                 
-                LOG.info("RCA analysis completed for: " + namespace + "/" + podName);
+                LOG.info("RCA analysis started for: " + namespace + "/" + podName + " with session: " + session.sessionId);
             } catch (Exception e) {
                 LOG.error("Error processing alert for pod: " + namespace + "/" + podName, e);
                 results.add(createErrorResult(alertName, namespace, podName, e));
@@ -167,8 +168,8 @@ public class WebhookManagerService {
         }
 
         try {
-            RcaReport report = rcaOrchestrator.runAnalysis(namespace, podName);
-            return createSuccessResult(alertName, namespace, podName, report);
+            RcaAnalysisSession session = rcaOrchestrator.startAnalysis(namespace, podName);
+            return createSuccessResult(alertName, namespace, podName, session);
         } catch (Exception e) {
             LOG.error("Error processing alert for pod: " + namespace + "/" + podName, e);
             return createErrorResult(alertName, namespace, podName, e);
@@ -178,15 +179,15 @@ public class WebhookManagerService {
     /**
      * Creates a success result map for an analyzed alert.
      */
-    private Map<String, Object> createSuccessResult(String alertName, String namespace, 
-                                                     String podName, RcaReport report) {
+    private Map<String, Object> createSuccessResult(String alertName, String namespace,
+                                                     String podName, RcaAnalysisSession session) {
         Map<String, Object> result = new HashMap<>();
         result.put("alert", alertName);
         result.put("namespace", namespace);
         result.put("pod", podName);
-        result.put("status", "analyzed");
-        result.put("issue", report.issue);
-        result.put("confidence", report.validationConfidence);
+        result.put("status", "in_progress");
+        result.put("sessionId", session.sessionId);
+        result.put("analysisStatus", session.status.name());
         return result;
     }
 

@@ -30,7 +30,7 @@ import org.jboss.logging.Logger;
  * </p>
  *
  * @see RagService
- * @see WorkloadScannerService
+ * @see ScannerService
  */
 @ApplicationScoped
 public class LifecycleService {
@@ -50,7 +50,7 @@ public class LifecycleService {
     RagService ragService;
 
     @Inject
-    WorkloadScannerService workloadScannerService;
+    ScannerService scannerService;
 
     /**
      * Scheduled task that periodically scans workloads for RCA analysis.
@@ -67,7 +67,7 @@ public class LifecycleService {
     @Scheduled(every = "${rca.scan.interval}", delayed = "2m", skipExecutionIf = LifecycleService.SkipIfNotMonitoringMode.class)
     public void scanWorkloads() {
         LOG.debug("Scheduled workload scan triggered."); // Changed to debug for less verbosity
-        workloadScannerService.scanWorkloads();
+        scannerService.scanWorkloads();
     }
 
     /**

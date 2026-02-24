@@ -1,5 +1,6 @@
 package com.causa.rca.service;
 
+import com.causa.rca.repository.RcaAnalysisRepository;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -30,7 +31,7 @@ import org.jboss.logging.Logger;
  * </p>
  *
  * @see RagService
- * @see SchedulerService
+ * @see LifecycleService
  */
 @ApplicationScoped
 public class StartupService {
@@ -40,6 +41,12 @@ public class StartupService {
     @Inject
     RagService ragService;
 
+    @Inject
+    RcaAnalysisRepository analysisRepository;
+    
+    @Inject
+    AnalysisTrackingService trackingService;
+
     @ConfigProperty(name = "cryostat.enabled", defaultValue = "false")
     boolean cryostatEnabled;
 
@@ -48,6 +55,9 @@ public class StartupService {
 
     @ConfigProperty(name = "rca.mode", defaultValue = "MONITORING")
     String rcaMode;
+
+    @ConfigProperty(name = "quarkus.mongodb.connection-string")
+    String mongoConnectionString;
 
     /**
      * Handles application startup event.
@@ -72,6 +82,8 @@ public class StartupService {
     void onStart(@Observes StartupEvent ev) {
         logStartupBanner();
         logConfiguration();
+        validateMongoDBConnection();
+        handleStuckAnalyses();
         initializeRag();
         logModeInformation();
         logStartupComplete();
@@ -102,6 +114,92 @@ public class StartupService {
         LOG.info("RCA Mode: " + rcaMode);
         LOG.info("RAG Enabled: " + ragEnabled);
         LOG.info("Cryostat Enabled: " + cryostatEnabled);
+        
+        // Log MongoDB connection info (without credentials)
+        String sanitizedConnection = mongoConnectionString.replaceAll("://[^@]+@", "://***:***@");
+        LOG.info("MongoDB Connection: " + sanitizedConnection);
+    }
+
+    /**
+     * Validates MongoDB connection and database setup.
+     * <p>
+     * Ensures the database is accessible before marking the application as ready.
+     * This prevents the application from accepting requests when the database is unavailable.
+     * </p>
+     */
+    private void validateMongoDBConnection() {
+        LOG.info("=== MongoDB Connection Validation ===");
+        try {
+            // Test connection by attempting to count documents
+            long count = analysisRepository.count();
+            LOG.info("✓ MongoDB connection successful");
+            LOG.info("  → Database: causa_rca");
+            LOG.info("  → Existing analyses: " + count);
+            
+            // Verify retryWrites setting
+            if (mongoConnectionString.contains("retryWrites=false")) {
+                LOG.info("✓ Retryable writes disabled (required for standalone MongoDB)");
+            } else {
+                LOG.warn("⚠ Warning: retryWrites not explicitly disabled");
+                LOG.warn("  → This may cause issues with standalone MongoDB instances");
+                LOG.warn("  → Add '?retryWrites=false' to connection string if you encounter errors");
+            }
+            
+        } catch (Exception e) {
+            LOG.error("✗ MongoDB connection FAILED", e);
+            LOG.error("═══════════════════════════════════════════════════════════");
+            LOG.error("  CRITICAL ERROR: Cannot connect to MongoDB");
+            LOG.error("  The application will start but database operations will fail");
+            LOG.error("  Please check:");
+            LOG.error("    1. MongoDB is running and accessible");
+            LOG.error("    2. Connection string is correct");
+            LOG.error("    3. Credentials are valid");
+            LOG.error("    4. Network connectivity");
+            LOG.error("═══════════════════════════════════════════════════════════");
+            throw new RuntimeException("MongoDB connection validation failed. Application cannot start.", e);
+        }
+    }
+
+    /**
+     * Handles stuck analyses from previous application runs.
+     * <p>
+     * When the application restarts, any analyses that were in progress will be stuck
+     * in an incomplete state. This method finds all such analyses and marks them as failed
+     * with an appropriate error message.
+     * </p>
+     */
+    private void handleStuckAnalyses() {
+        LOG.info("=== Checking for Stuck Analyses ===");
+        try {
+            // Find all analyses that are in progress states
+            var stuckAnalyses = analysisRepository.list(
+                "status in ?1",
+                java.util.Arrays.asList(
+                    com.causa.rca.model.AnalysisStatus.INITIATED,
+                    com.causa.rca.model.AnalysisStatus.COLLECTING_DATA,
+                    com.causa.rca.model.AnalysisStatus.DETECTING_ANOMALY,
+                    com.causa.rca.model.AnalysisStatus.ANALYZING_RCA,
+                    com.causa.rca.model.AnalysisStatus.VALIDATING
+                )
+            );
+            
+            if (stuckAnalyses.isEmpty()) {
+                LOG.info("✓ No stuck analyses found");
+            } else {
+                LOG.info("Found " + stuckAnalyses.size() + " stuck analysis(es). Marking as failed...");
+                
+                for (var analysis : stuckAnalyses) {
+                    String errorMsg = "Analysis interrupted due to application restart. " +
+                                    "Last known stage: " + analysis.status.getDisplayName();
+                    trackingService.failSession(analysis.sessionId, errorMsg);
+                    LOG.info("  → Marked session " + analysis.sessionId + " as failed");
+                }
+                
+                LOG.info("✓ Successfully handled " + stuckAnalyses.size() + " stuck analysis(es)");
+            }
+        } catch (Exception e) {
+            LOG.error("Error handling stuck analyses. Continuing startup...", e);
+        }
     }
 
     /**

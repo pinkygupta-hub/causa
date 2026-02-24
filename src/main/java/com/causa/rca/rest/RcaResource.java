@@ -1,6 +1,7 @@
 package com.causa.rca.rest;
 
 import com.causa.rca.model.AlertWebhookRequest;
+import com.causa.rca.model.RcaAnalysisSession;
 import com.causa.rca.model.RcaReport;
 import com.causa.rca.service.RcaOrchestrator;
 import com.causa.rca.service.WebhookManagerService;
@@ -41,9 +42,10 @@ public class RcaResource {
     WebhookManagerService webhookManager;
 
     /**
-     * Triggers a comprehensive Root Cause Analysis for a specific pod.
+     * Starts an asynchronous Root Cause Analysis for a specific pod.
      * <p>
-     * Initiates the complete RCA pipeline including:
+     * Initiates the RCA pipeline asynchronously and returns immediately with session information.
+     * The analysis runs in the background through the following stages:
      * <ol>
      *   <li>Data collection (metrics, logs, events, JFR data)</li>
      *   <li>Anomaly detection using AI</li>
@@ -60,19 +62,18 @@ public class RcaResource {
      *
      * @param namespace the Kubernetes namespace where the pod is located (defaults to "default")
      * @param pod the name of the pod to analyze (required)
-     * @return an {@link RcaReport} containing the complete analysis results including
-     *         issue description, evidence, logs, proposed solution, and confidence score
+     * @return an {@link RcaAnalysisSession} with status IN_PROGRESS and session details
      * @throws BadRequestException if the pod parameter is null or empty
      */
     @GET
     @Path("/analyze")
-    public RcaReport analyze(
+    public RcaAnalysisSession analyze(
             @QueryParam("namespace") @DefaultValue("default") String namespace,
             @QueryParam("pod") String pod) {
         if (pod == null || pod.isEmpty()) {
             throw new BadRequestException("Pod name is required");
         }
-        return orchestrator.runAnalysis(namespace, pod);
+        return orchestrator.startAnalysis(namespace, pod);
     }
 
     /**
