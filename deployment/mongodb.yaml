@@ -1,0 +1,152 @@
+---
+# MongoDB PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# MongoDB Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: default
+  labels:
+    app: mongodb
+    component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        component: database
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:7.0
+        ports:
+        - containerPort: 27017
+          name: mongodb
+          protocol: TCP
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          value: "admin"
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          value: "password"
+        - name: MONGO_INITDB_DATABASE
+          value: "causa_rca"
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+        resources:
+          requests:
+            memory: "250Mi"
+            cpu: "250m"
+          limits:
+            memory: "500Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: mongodb-data
+        persistentVolumeClaim:
+          claimName: mongodb-pvc
+---
+# MongoDB Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: default
+  labels:
+    app: mongodb
+    component: database
+spec:
+  type: ClusterIP
+  ports:
+  - port: 27017
+    targetPort: 27017
+    protocol: TCP
+    name: mongodb
+  selector:
+    app: mongodb
+---
+# MongoDB Initialization Job (Creates indexes)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-init
+  namespace: default
+spec:
+  ttlSecondsAfterFinished: 100  # Automatically delete job 100 seconds after completion
+  template:
+    spec:
+      containers:
+      - name: mongo-init
+        image: mongo:7.0
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "Waiting for MongoDB to be ready..."
+          until mongosh --host mongodb --username admin --password password --authenticationDatabase admin --eval "db.adminCommand('ping')" > /dev/null 2>&1; do
+            echo "MongoDB not ready yet, waiting..."
+            sleep 5
+          done
+          
+          echo "MongoDB is ready! Creating indexes..."
+          
+          mongosh --host mongodb --username admin --password password --authenticationDatabase admin causa_rca <<EOF
+          
+          // Create indexes for efficient queries
+          db.rca_analyses.createIndex({ "timestamp": -1 });
+          db.rca_analyses.createIndex({ "status": 1 });
+          db.rca_analyses.createIndex({ "namespace": 1, "podName": 1 });
+          db.rca_analyses.createIndex({ "sessionId": 1 }, { unique: true });
+          db.rca_analyses.createIndex({ "alertSource": 1 });
+          
+          // Create compound index for common queries
+          db.rca_analyses.createIndex({ "status": 1, "timestamp": -1 });
+          
+          print("Indexes created successfully!");
+          
+          // Show all indexes
+          print("Current indexes:");
+          db.rca_analyses.getIndexes().forEach(function(index) {
+            printjson(index);
+          });
+          
+          EOF
+          
+          echo "MongoDB initialization complete!"
+      restartPolicy: OnFailure
+  backoffLimit: 3
