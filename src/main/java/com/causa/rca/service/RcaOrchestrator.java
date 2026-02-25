@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import com.causa.rca.ai.AnomalyDetector;
 import com.causa.rca.ai.RootCauseAnalyst;
@@ -59,6 +60,18 @@ public class RcaOrchestrator {
 
     @Inject
     AnalysisTrackingService trackingService;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "phi3:mini")
+    String detectorModel;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.rca.chat-model.model-id", defaultValue = "phi3:mini")
+    String rcaModel;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.validator.chat-model.model-id", defaultValue = "phi3:mini")
+    String validatorModel;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = "http://ollama.default.svc.cluster.local:11434")
+    String ollamaBaseUrl;
 
     /**
      * Starts an asynchronous RCA analysis pipeline for a specific pod.
@@ -138,10 +151,22 @@ public class RcaOrchestrator {
             trackingService.updateStatus(sessionId, AnalysisStatus.DETECTING_ANOMALY,
                 "Analyzing data to detect anomalies using AI");
             
-            LOG.info("Step 1: Running Anomaly Detection...");
+            LOG.info("Step 1: Running Anomaly Detection with model: " + detectorModel);
             LOG.debug("Context for Anomaly Detection:\n" + fullContext);
-            String rawAnomaly = anomalyDetector.detectAnomaly(fullContext);
-            LOG.info("RAW Anomaly Detector Response: [" + rawAnomaly + "]");
+            
+            String rawAnomaly;
+            try {
+                rawAnomaly = anomalyDetector.detectAnomaly(fullContext);
+                LOG.info("RAW Anomaly Detector Response: [" + rawAnomaly + "]");
+            } catch (Exception e) {
+                String errorMsg = String.format(
+                    "Failed to detect anomaly using model '%s' at %s. " +
+                    "Ensure the model is available: kubectl exec -it <ollama-pod> -- ollama pull %s",
+                    detectorModel, ollamaBaseUrl, detectorModel
+                );
+                LOG.error(errorMsg, e);
+                throw new RuntimeException(errorMsg, e);
+            }
 
             // Sanitize LLM output to get the core anomaly type (first line, before any comments)
             String anomalyType = rawAnomaly.split("\n")[0].split("#")[0].trim();
@@ -162,10 +187,22 @@ public class RcaOrchestrator {
             trackingService.updateStatus(sessionId, AnalysisStatus.ANALYZING_RCA,
                 "Performing root cause analysis for detected anomaly: " + anomalyType);
             
-            LOG.info("Step 2: Running Root Cause Analysis...");
+            LOG.info("Step 2: Running Root Cause Analysis with model: " + rcaModel);
             LOG.debug("Context for RCA:\n" + fullContext);
-            String rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, fullContext);
-            LOG.info("RAW RCA Result: [" + rcaOutput + "]");
+            
+            String rcaOutput;
+            try {
+                rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, fullContext);
+                LOG.info("RAW RCA Result: [" + rcaOutput + "]");
+            } catch (Exception e) {
+                String errorMsg = String.format(
+                    "Failed to perform root cause analysis using model '%s' at %s. " +
+                    "Ensure the model is available: kubectl exec -it <ollama-pod> -- ollama pull %s",
+                    rcaModel, ollamaBaseUrl, rcaModel
+                );
+                LOG.error(errorMsg, e);
+                throw new RuntimeException(errorMsg, e);
+            }
             trackingService.recordStageEnd(sessionId, "rca_analysis");
 
             // Step 3: Validation and Formatting
@@ -173,10 +210,22 @@ public class RcaOrchestrator {
             trackingService.updateStatus(sessionId, AnalysisStatus.VALIDATING,
                 "Validating and formatting analysis results");
             
-            LOG.info("Step 3: Running Validation and Formatting...");
+            LOG.info("Step 3: Running Validation and Formatting with model: " + validatorModel);
             LOG.debug("Context for Validation:\n" + rcaOutput);
-            RcaReport report = reportValidator.validateAndFormat(rcaOutput, fullContext);
-            LOG.info("Final Report Object: " + report);
+            
+            RcaReport report;
+            try {
+                report = reportValidator.validateAndFormat(rcaOutput, fullContext);
+                LOG.info("Final Report Object: " + report);
+            } catch (Exception e) {
+                String errorMsg = String.format(
+                    "Failed to validate and format report using model '%s' at %s. " +
+                    "Ensure the model is available: kubectl exec -it <ollama-pod> -- ollama pull %s",
+                    validatorModel, ollamaBaseUrl, validatorModel
+                );
+                LOG.error(errorMsg, e);
+                throw new RuntimeException(errorMsg, e);
+            }
             trackingService.recordStageEnd(sessionId, "validation");
 
             // Mark as completed

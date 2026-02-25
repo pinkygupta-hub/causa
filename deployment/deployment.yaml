@@ -40,7 +40,7 @@ spec:
       serviceAccountName: rca-agent-sa
       containers:
       - name: rca-agent
-        image: quay.io/rh-ee-shesaxen/rca-agent:poc240226
+        image: quay.io/rh-ee-shesaxen/rca-agent:poc250226
         imagePullPolicy: Always
         ports:
         - containerPort: 9090
@@ -80,6 +80,6 @@ spec:
     app: rca-agent
   ports:
     - protocol: TCP
-      port: 80
-      targetPort: 8080
+      port: 9090
+      targetPort: 9090
   type: ClusterIP
