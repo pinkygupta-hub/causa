@@ -83,3 +83,17 @@ spec:
       port: 9090
       targetPort: 9090
   type: ClusterIP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: causa-rca
+  namespace: default
+spec:
+  to:
+    kind: Service
+    name: rca-agent
+    weight: 100
+  port:
+    targetPort: 9090
+  wildcardPolicy: None
