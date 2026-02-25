@@ -35,6 +35,6 @@ public interface AnomalyDetector {
      * @return a string representing the detected anomaly type (e.g., "OOM_KILLED",
      *         "CPU_THROTTLING", "CRASH_LOOP") or "HEALTHY" if no anomaly is detected
      */
-    @SystemMessage("You are a specialized anomaly detection model. Analyze the METRICS and POD STATUS data. Output ONLY the anomaly type or 'HEALTHY'. Example: 'OOM_KILLED'.")
+    @SystemMessage("You are a specialized anomaly detection model. Analyze the provided METRICS, LOGS, K8s Events and POD STATUS data. Output ONLY the detected anomaly type or 'HEALTHY'. Be precise: for memory-related issues, output 'OOM_KILLED'; for CPU spikes, output 'CPU_THROTTLED'; for latency, output 'HIGH_LATENCY', etc. or 'OTHER_ANOMALY' if it doesn’t match known types")
     String detectAnomaly(@UserMessage String context);
 }
