@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
       - name: mongodb
-        image: mongo:7.0
+        image: docker.io/library/mongo:7.0
         ports:
         - containerPort: 27017
           name: mongodb
@@ -51,10 +51,10 @@ spec:
           mountPath: /data/db
         resources:
           requests:
-            memory: "250Mi"
+            memory: "512Mi"
             cpu: "250m"
           limits:
-            memory: "500Mi"
+            memory: "512Mi"
             cpu: "500m"
         livenessProbe:
           exec:
@@ -112,7 +112,7 @@ spec:
     spec:
       containers:
       - name: mongo-init
-        image: mongo:7.0
+        image: docker.io/library/mongo:7.0
         command:
         - /bin/bash
         - -c

@@ -1,0 +1,85 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rca-to-prometheus
+  namespace: openshift-monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: prometheus
+      app.kubernetes.io/instance: k8s
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/part-of: kube-prometheus
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+    ports:
+    - protocol: TCP
+      port: 9092
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rca-agent
+  labels:
+    app: rca-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rca-agent
+  template:
+    metadata:
+      labels:
+        app: rca-agent
+    spec:
+      serviceAccountName: rca-agent-sa
+      containers:
+      - name: rca-agent
+        image: quay.io/rh-ee-shesaxen/rca-agent:poc1_v1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 9090
+        env:
+        # Ollama Configuration
+        - name: OLLAMA_BASE_URL
+          value: "http://ollama.default.svc.cluster.local:11434"
+        # Prometheus Configuration
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-k8s.openshift-monitoring.svc.cluster.local:9092"
+        # MongoDB Configuration
+        - name: MONGODB_CONNECTION_STRING
+          value: "mongodb://mongodb.default.svc.cluster.local:27017"
+        - name: MONGODB_DATABASE
+          value: "causa_rca"
+        - name: MONGODB_USER
+          value: "admin"
+        - name: MONGODB_PASSWORD
+          value: "password"
+        # RCA Mode Configuration
+        - name: RCA_MODE
+          value: "ALERT_DRIVEN"
+        # Cryostat Configuration (optional)
+        - name: CRYOSTAT_ENABLED
+          value: "false"
+        resources:
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rca-agent
+spec:
+  selector:
+    app: rca-agent
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090
+  type: ClusterIP
