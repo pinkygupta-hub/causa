@@ -69,19 +69,19 @@ OLLAMA_TIMEOUT=300s
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OLLAMA_DETECTOR_MODEL` | `qwen2.5:3b-instruct` | Anomaly detection model |
+| `OLLAMA_DETECTOR_MODEL` | `phi3:mini` | Anomaly detection model |
 | `OLLAMA_DETECTOR_TIMEOUT` | `300s` | Detector timeout |
-| `OLLAMA_RCA_MODEL` | `qwen2.5:3b-instruct` | Root cause analysis model |
+| `OLLAMA_RCA_MODEL` | `phi3:mini` | Root cause analysis model |
 | `OLLAMA_RCA_TIMEOUT` | `300s` | RCA timeout |
-| `OLLAMA_VALIDATOR_MODEL` | `qwen2.5:3b-instruct` | Validation model |
+| `OLLAMA_VALIDATOR_MODEL` | `phi3:mini` | Validation model |
 | `OLLAMA_VALIDATOR_TIMEOUT` | `300s` | Validator timeout |
-| `OLLAMA_EMBEDDING_MODEL` | `qwen2.5:3b-instruct` | Embedding model for RAG |
+| `OLLAMA_EMBEDDING_MODEL` | `phi3:mini` | Embedding model for RAG |
 
 **Example with Different Models:**
 ```bash
 OLLAMA_DETECTOR_MODEL=llama2:7b
 OLLAMA_RCA_MODEL=mixtral:8x7b
-OLLAMA_VALIDATOR_MODEL=qwen2.5:3b-instruct
+OLLAMA_VALIDATOR_MODEL=phi3:mini
 ```
 
 ---
@@ -139,7 +139,7 @@ QUARKUS_TLS_TRUST_ALL=false
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RAG_ENABLED` | `false` | Enable RAG with knowledge base |
+| `RAG_ENABLED` | `true` | Enable RAG with knowledge base |
 | `RAG_KNOWLEDGE_BASE_PATH` | `knowledge_base/` | Path to knowledge base files |
 
 **Example:**
