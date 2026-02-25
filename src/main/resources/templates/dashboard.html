@@ -39,8 +39,12 @@
         <!-- Vertical Navigation Tabs -->
         <nav class="vertical-tabs" id="sidebar">
             <button class="tab-button active" data-tab="dashboard">
-                <span class="tab-icon">📊</span>
+                <span class="tab-icon">🏠</span>
                 <span class="tab-label">Dashboard</span>
+            </button>
+            <button class="tab-button" data-tab="analysis">
+                <span class="tab-icon">📊</span>
+                <span class="tab-label">Analysis</span>
             </button>
             <button class="tab-button" data-tab="workloads">
                 <span class="tab-icon">⚙️</span>
@@ -54,8 +58,43 @@
 
         <!-- Main Content Area -->
         <main class="dashboard-content" id="mainContent">
-            <!-- Dashboard Tab -->
+            <!-- Dashboard Tab (Unhealthy Analyses Overview) -->
             <div id="dashboard-tab" class="tab-content active">
+                <section class="table-section">
+                    <h2 class="section-title">Issues Dashboard</h2>
+                    <p class="section-description">
+                        Completed analyses with identified issues.
+                    </p>
+                    <div id="dashboardLoadingIndicator" class="loading-spinner">Loading dashboard...</div>
+                    <div id="dashboardContent" style="display: none;">
+                        <div id="dashboardEmptyState" class="empty-state" style="display: none;">
+                            <div class="empty-icon">☕</div>
+                            <h3>Sit back and grab a coffee!</h3>
+                            <p>Everything is under control. No issues detected in your workloads.</p>
+                        </div>
+                        <div class="table-container" id="dashboardTableContainer" style="display: none;">
+                            <table id="dashboardTable" class="analyses-table">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Namespace</th>
+                                        <th>Pod</th>
+                                        <th>Anomaly Type</th>
+                                        <th>Issue</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboardTableBody">
+                                    <!-- Populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Analysis Tab (All Analyses) -->
+            <div id="analysis-tab" class="tab-content">
                 <!-- Statistics Cards -->
                 <section class="stats-section">
                     <div class="stats-grid">
@@ -114,7 +153,7 @@
                                         <th>Timestamp</th>
                                         <th>Namespace</th>
                                         <th>Pod</th>
-                                        <th>Status</th>
+                                        <th>Analysis Status</th>
                                         <th>Progress</th>
                                         <th>Duration</th>
                                         <th>Actions</th>

@@ -309,6 +309,27 @@ public class AnalysisTrackingService {
     }
     
     /**
+     * Retrieves completed unhealthy analyses (not HEALTHY status).
+     * Used for the dashboard overview showing only problematic analyses.
+     *
+     * @param page page number (0-based)
+     * @param pageSize number of results per page
+     * @return list of completed unhealthy analyses
+     */
+    public List<RcaAnalysisSession> getUnhealthyAnalyses(int page, int pageSize) {
+        return repository.findCompletedUnhealthy(page, pageSize);
+    }
+    
+    /**
+     * Counts completed unhealthy analyses.
+     *
+     * @return number of completed unhealthy analyses
+     */
+    public long countUnhealthyAnalyses() {
+        return repository.countCompletedUnhealthy();
+    }
+    
+    /**
      * Simple statistics holder class.
      */
     public static class AnalysisStats {

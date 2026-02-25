@@ -200,4 +200,32 @@ public class RcaAnalysisRepository implements PanacheMongoRepository<RcaAnalysis
     public long getTotalCount() {
         return count();
     }
+    
+    /**
+     * Finds completed analyses that are not healthy (have issues).
+     * Used for the dashboard overview showing only problematic analyses.
+     *
+     * @param page page number (0-based)
+     * @param pageSize number of results per page
+     * @return list of completed unhealthy analyses
+     */
+    public List<RcaAnalysisSession> findCompletedUnhealthy(int page, int pageSize) {
+        return find("status = ?1 and (report.anomalyType != ?2 and report.anomalyType != null)",
+                   Sort.descending("timestamp"),
+                   AnalysisStatus.COMPLETED,
+                   "HEALTHY")
+                .page(page, pageSize)
+                .list();
+    }
+    
+    /**
+     * Counts completed analyses that are not healthy.
+     *
+     * @return number of completed unhealthy analyses
+     */
+    public long countCompletedUnhealthy() {
+        return count("status = ?1 and (report.anomalyType != ?2 and report.anomalyType != null)",
+                    AnalysisStatus.COMPLETED,
+                    "HEALTHY");
+    }
 }

@@ -226,4 +226,55 @@ public class AnalysisApiResource {
                     .build();
         }
     }
+    
+    /**
+     * Gets completed unhealthy analyses for the dashboard overview.
+     * Returns only analyses that are completed and have identified issues (not HEALTHY).
+     *
+     * @param page page number (0-based)
+     * @param pageSize number of results per page
+     * @return list of completed unhealthy analyses
+     */
+    @GET
+    @Path("/analyses/unhealthy")
+    public Response getUnhealthyAnalyses(
+            @QueryParam("page") @DefaultValue("0") int page,
+            @QueryParam("pageSize") @DefaultValue("50") int pageSize) {
+        
+        LOG.infof("Getting unhealthy analyses: page=%d, pageSize=%d", page, pageSize);
+        
+        try {
+            // Validate pagination parameters
+            if (page < 0) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "Page must be >= 0"))
+                        .build();
+            }
+            if (pageSize < 1 || pageSize > 100) {
+                return Response.status(Response.Status.BAD_REQUEST)
+                        .entity(Map.of("error", "Page size must be between 1 and 100"))
+                        .build();
+            }
+            
+            // Get unhealthy analyses
+            List<RcaAnalysisSession> analyses = trackingService.getUnhealthyAnalyses(page, pageSize);
+            long totalCount = trackingService.countUnhealthyAnalyses();
+            
+            // Build response with metadata
+            Map<String, Object> response = new HashMap<>();
+            response.put("analyses", analyses);
+            response.put("page", page);
+            response.put("pageSize", pageSize);
+            response.put("count", analyses.size());
+            response.put("total", totalCount);
+            
+            return Response.ok(response).build();
+            
+        } catch (Exception e) {
+            LOG.error("Error getting unhealthy analyses", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(Map.of("error", "Failed to retrieve unhealthy analyses: " + e.getMessage()))
+                    .build();
+        }
+    }
 }

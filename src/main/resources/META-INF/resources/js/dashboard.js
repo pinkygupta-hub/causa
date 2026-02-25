@@ -13,6 +13,9 @@ $(document).ready(function() {
     // Initialize sidebar toggle
     initSidebarToggle();
     
+    // Load dashboard data on page load
+    loadDashboard();
+    
     // Check if the analyses table exists
     if ($('#analysesTable').length) {
         initAnalysesTable();
@@ -42,7 +45,9 @@ function initTabSwitching() {
             document.getElementById(`${targetTab}-tab`).classList.add('active');
             
             // Load data for specific tabs
-            if (targetTab === 'workloads') {
+            if (targetTab === 'dashboard') {
+                loadDashboard();
+            } else if (targetTab === 'workloads') {
                 loadWorkloads();
             }
             
@@ -124,6 +129,139 @@ function initAnalysesTable() {
     });
     
     console.log('Analyses DataTable initialized successfully');
+}
+
+/**
+ * Load dashboard data (unhealthy analyses)
+ */
+function loadDashboard() {
+    console.log('Loading dashboard data...');
+    
+    // Check if dashboard elements exist
+    const loadingIndicator = document.getElementById('dashboardLoadingIndicator');
+    const dashboardContent = document.getElementById('dashboardContent');
+    const emptyState = document.getElementById('dashboardEmptyState');
+    const tableContainer = document.getElementById('dashboardTableContainer');
+    
+    if (!loadingIndicator || !dashboardContent) {
+        console.log('Dashboard elements not found, skipping load');
+        return;
+    }
+    
+    // Check if dashboard table is already initialized
+    if ($.fn.DataTable.isDataTable('#dashboardTable')) {
+        console.log('Dashboard table already initialized');
+        return;
+    }
+    
+    // Show loading
+    loadingIndicator.style.display = 'block';
+    dashboardContent.style.display = 'none';
+    
+    // Fetch unhealthy analyses from API
+    fetch('/api/analyses/unhealthy?pageSize=100')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch dashboard data');
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide loading
+            if (loadingIndicator) loadingIndicator.style.display = 'none';
+            if (dashboardContent) dashboardContent.style.display = 'block';
+            
+            if (!data.analyses || data.analyses.length === 0) {
+                // Show empty state
+                if (emptyState) emptyState.style.display = 'block';
+                if (tableContainer) tableContainer.style.display = 'none';
+            } else {
+                // Show table with data
+                if (emptyState) emptyState.style.display = 'none';
+                if (tableContainer) tableContainer.style.display = 'block';
+                populateDashboardTable(data.analyses);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading dashboard:', error);
+            if (loadingIndicator) {
+                loadingIndicator.innerHTML = '<div class="error-message"><span>⚠</span><span>Failed to load dashboard data</span></div>';
+            }
+        });
+}
+
+/**
+ * Populate dashboard table with unhealthy analyses
+ */
+function populateDashboardTable(analyses) {
+    const tbody = document.getElementById('dashboardTableBody');
+    
+    if (!tbody) {
+        console.error('Dashboard table body not found');
+        return;
+    }
+    
+    tbody.innerHTML = '';
+    
+    analyses.forEach(analysis => {
+        const row = document.createElement('tr');
+        row.className = 'analysis-row';
+        
+        // Extract anomaly info from report - use whatever is returned
+        const anomalyType = analysis.report?.anomalyType || 'Unknown';
+        const issueTitle = analysis.report?.title || analysis.report?.issue || 'Issue detected';
+        
+        row.innerHTML = `
+            <td class="timestamp-cell" data-order="${analysis.timestamp}">
+                <div class="timestamp">${formatTimestamp(analysis.timestamp)}</div>
+            </td>
+            <td class="namespace">${analysis.namespace}</td>
+            <td class="pod-cell">
+                <div class="pod-name">${analysis.podName}</div>
+            </td>
+            <td class="anomaly-type">
+                <span class="badge badge-warning">${anomalyType}</span>
+            </td>
+            <td class="issue-title">
+                <div class="issue-text">${issueTitle}</div>
+            </td>
+            <td class="actions-cell">
+                <a href="/dashboard/analysis/${analysis.sessionId}" class="btn btn-small btn-view">
+                    View Details
+                </a>
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+    
+    // Initialize DataTable
+    $('#dashboardTable').DataTable({
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        order: [[0, 'desc']], // Sort by timestamp descending
+        columnDefs: [
+            {
+                targets: 0, // Timestamp column
+                type: 'date'
+            },
+            {
+                targets: -1, // Actions column
+                orderable: false,
+                searchable: false
+            }
+        ],
+        language: {
+            search: "Search:",
+            lengthMenu: "Show _MENU_ entries",
+            info: "Showing _START_ to _END_ of _TOTAL_ issues",
+            emptyTable: "No issues found"
+        },
+        responsive: true,
+        autoWidth: false
+    });
+    
+    console.log(`Loaded ${analyses.length} unhealthy analyses to dashboard`);
 }
 
 /**
