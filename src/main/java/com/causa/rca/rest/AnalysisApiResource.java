@@ -227,5 +227,3 @@ public class AnalysisApiResource {
         }
     }
 }
-
-// Made with Bob

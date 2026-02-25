@@ -274,5 +274,3 @@ public class DashboardResource {
         }
     }
 }
-
-// Made with Bob

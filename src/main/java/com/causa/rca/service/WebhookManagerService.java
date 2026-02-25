@@ -246,5 +246,3 @@ public class WebhookManagerService {
         return response;
     }
 }
-
-// Made with Bob

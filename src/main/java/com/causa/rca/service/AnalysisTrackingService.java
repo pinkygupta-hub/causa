@@ -319,5 +319,3 @@ public class AnalysisTrackingService {
         public long healthy;
     }
 }
-
-// Made with Bob

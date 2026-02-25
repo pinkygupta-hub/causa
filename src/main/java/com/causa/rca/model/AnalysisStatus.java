@@ -100,4 +100,3 @@ public enum AnalysisStatus {
     
 }
 
-// Made with Bob

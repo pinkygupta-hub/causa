@@ -201,5 +201,3 @@ public class RcaAnalysisRepository implements PanacheMongoRepository<RcaAnalysis
         return count();
     }
 }
-
-// Made with Bob

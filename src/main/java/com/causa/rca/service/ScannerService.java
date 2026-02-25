@@ -200,5 +200,3 @@ public class ScannerService {
         return rcaLabel;
     }
 }
-
-// Made with Bob

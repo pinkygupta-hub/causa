@@ -303,4 +303,3 @@ public class RcaAnalysisSession extends PanacheMongoEntity {
     
 }
 
-// Made with Bob
