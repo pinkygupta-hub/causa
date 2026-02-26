@@ -40,7 +40,7 @@ spec:
       serviceAccountName: rca-agent-sa
       containers:
       - name: rca-agent
-        image: quay.io/rh-ee-shesaxen/rca-agent:poc1_v1
+        image: quay.io/rh-ee-shesaxen/rca-agent:poc_2.0
         imagePullPolicy: Always
         ports:
         - containerPort: 9090

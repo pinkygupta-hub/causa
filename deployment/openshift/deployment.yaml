@@ -19,7 +19,7 @@ spec:
           kubernetes.io/metadata.name: default
     ports:
     - protocol: TCP
-      port: 9092
+      port: 9091
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -40,7 +40,7 @@ spec:
       serviceAccountName: rca-agent-sa
       containers:
       - name: rca-agent
-        image: quay.io/rh-ee-shesaxen/rca-agent:poc1_v1
+        image: quay.io/rh-ee-shesaxen/rca-agent:poc_2.0
         imagePullPolicy: Always
         ports:
         - containerPort: 9090
@@ -50,7 +50,7 @@ spec:
           value: "http://ollama.default.svc.cluster.local:11434"
         # Prometheus Configuration
         - name: PROMETHEUS_URL
-          value: "http://prometheus-k8s.openshift-monitoring.svc.cluster.local:9092"
+          value: "https://prometheus-k8s.openshift-monitoring.svc.cluster.local:9091"
         # MongoDB Configuration
         - name: MONGODB_CONNECTION_STRING
           value: "mongodb://mongodb.default.svc.cluster.local:27017"
