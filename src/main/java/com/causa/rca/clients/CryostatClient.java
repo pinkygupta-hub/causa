@@ -1,4 +1,4 @@
-package com.causa.rca.external;
+package com.causa.rca.clients;
 
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;

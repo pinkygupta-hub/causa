@@ -1,4 +1,4 @@
-package com.causa.rca.service;
+package com.causa.rca.utils;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;

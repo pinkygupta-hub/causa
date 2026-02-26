@@ -27,7 +27,7 @@ spec:
         fsGroup: 1001
       containers:
         - name: ollama
-          image: ollama/ollama:latest
+          image: docker.io/ollama/ollama:latest
           ports:
             - containerPort: 11434
           env:

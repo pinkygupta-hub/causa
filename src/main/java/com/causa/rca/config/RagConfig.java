@@ -1,4 +1,4 @@
-package com.causa.rca.service;
+package com.causa.rca.config;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;

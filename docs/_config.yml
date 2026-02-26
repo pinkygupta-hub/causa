@@ -1,0 +1,36 @@
+title: Causa AI
+description: AI-Powered Root Cause Analysis for Kubernetes
+baseurl: "/causa"
+url: ""
+
+theme: just-the-docs
+
+color_scheme: light
+search_enabled: true
+
+aux_links:
+  GitHub:
+    - https://github.com/causaai/causa
+
+markdown: kramdown
+highlighter: rouge
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .sass-cache
+  - .jekyll-cache
+  - README.md
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
