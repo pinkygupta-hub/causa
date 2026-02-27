@@ -35,6 +35,7 @@ spec:
       containers:
       - name: mongodb
         image: docker.io/library/mongo:7.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 27017
           name: mongodb

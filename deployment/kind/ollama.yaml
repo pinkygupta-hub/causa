@@ -27,7 +27,8 @@ spec:
         fsGroup: 1001
       containers:
         - name: ollama
-          image: docker.io/ollama/ollama:latest
+          image: docker.io/ollama/ollama:0.17.1
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 11434
           env:
