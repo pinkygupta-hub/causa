@@ -68,6 +68,15 @@ public class DashboardResource {
     @ConfigProperty(name = "rca.label")
     String rcaLabel;
     
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "phi3:mini")
+    String detectorModel;
+    
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.rca.chat-model.model-id", defaultValue = "phi3:mini")
+    String rcaModel;
+    
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.validator.chat-model.model-id", defaultValue = "phi3:mini")
+    String validatorModel;
+    
     /**
      * Renders the main dashboard page.
      *
@@ -138,7 +147,10 @@ public class DashboardResource {
             // Render template
             TemplateInstance template = analysisDetails
                     .data("session", session)
-                    .data("showProposedSolution", showProposedSolution);
+                    .data("showProposedSolution", showProposedSolution)
+                    .data("detectorModel", detectorModel)
+                    .data("rcaModel", rcaModel)
+                    .data("validatorModel", validatorModel);
             
             return Response.ok(template.render()).build();
             
