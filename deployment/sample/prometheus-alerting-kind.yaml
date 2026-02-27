@@ -19,7 +19,7 @@ spec:
           container_memory_working_set_bytes{container!="", container!="POD"}
           /
           container_spec_memory_limit_bytes{container!="", container!="POD"}
-        ) * 100 > 85
+        ) * 100 > 80
       labels:
         severity: critical
         alertname: causa-high-memory
