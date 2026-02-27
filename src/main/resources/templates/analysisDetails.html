@@ -25,31 +25,12 @@
         </div>
     </header>
 
-    <div class="dashboard-container" x-data="{ evidenceExpanded: false, logsExpanded: false }">
+    <div class="dashboard-container" x-data="{ evidenceExpanded: true, logsExpanded: true }">
         <!-- Analysis Header -->
         <section class="analysis-header-section">
             <h1 class="page-title">
                 <span>Analysis Details</span>
             </h1>
-            
-            <div class="analysis-meta-grid">
-                <div class="meta-card">
-                    <div class="meta-label">Status</div>
-                    <div class="status-badge {session.status.cssClass} large">
-                        <span>{session.status.displayName}</span>
-                    </div>
-                </div>
-                
-                <div class="meta-card">
-                    <div class="meta-label">Started</div>
-                    <div class="meta-value">{session.formattedTimestamp}</div>
-                </div>
-                
-                <div class="meta-card">
-                    <div class="meta-label">Duration</div>
-                    <div class="meta-value">{session.formattedDuration}</div>
-                </div>
-            </div>
 
             {#if session.isInProgress()}
             <div class="progress-section">
@@ -76,7 +57,117 @@
         </section>
         {/if}
 
-        <!-- Stage Timing Information (only for successful analyses) -->
+        <!-- Pod Information -->
+        <section class="details-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Pod Information</span>
+                </h2>
+            </div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Namespace</div>
+                    <div class="info-value">{session.namespace}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Pod Name</div>
+                    <div class="info-value">{session.podName}</div>
+                </div>
+            </div>
+        </section>
+
+        {#if session.report}
+        <!-- Issues Detected -->
+        <section class="details-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Issues Detected</span>
+                </h2>
+            </div>
+            <div class="content-box">
+                <h3 class="issue-title">{session.report.title}</h3>
+                <div class="issue-description">{session.report.issue}</div>
+            </div>
+        </section>
+
+        <!-- Evidence (Expanded by default) -->
+        <section class="details-section">
+            <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
+                <h2 class="section-title">
+                    <span>Evidence</span>
+                </h2>
+                <span class="expand-icon" x-text="evidenceExpanded ? '▲' : '▼'">▲</span>
+            </div>
+            <div class="content-box" x-show="evidenceExpanded" x-collapse>
+                <div class="evidence-content">{session.report.evidence}</div>
+            </div>
+        </section>
+
+        <!-- Supported Logs (Expanded by default) -->
+        {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
+        <section class="details-section">
+            <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
+                <h2 class="section-title">
+                    <span>Supported Logs</span>
+                </h2>
+                <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▲</span>
+            </div>
+            <div class="content-box logs-box" x-show="logsExpanded" x-collapse>
+                <div class="logs-content">
+                    {#for log in session.report.supportedLogs}
+                    <div class="log-entry">
+                        <span class="log-bullet">•</span>
+                        <span class="log-text">{log}</span>
+                    </div>
+                    {/for}
+                </div>
+            </div>
+        </section>
+        {/if}
+
+        <!-- Proposed Solution (if enabled) -->
+        {#if showProposedSolution && session.report.proposedSolution}
+        <section class="details-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Proposed Solution</span>
+                </h2>
+            </div>
+            <div class="content-box solution-box">
+                <div class="solution-content">{session.report.proposedSolution}</div>
+            </div>
+        </section>
+        {/if}
+        {/if}
+
+        <!-- Analysis Metadata (Status, Started, Duration) -->
+        <section class="details-section">
+            <div class="section-header">
+                <h2 class="section-title">
+                    <span>Analysis Metadata</span>
+                </h2>
+            </div>
+            <div class="analysis-meta-grid">
+                <div class="meta-card">
+                    <div class="meta-label">Status</div>
+                    <div class="status-badge {session.status.cssClass} large">
+                        <span>{session.status.displayName}</span>
+                    </div>
+                </div>
+                
+                <div class="meta-card">
+                    <div class="meta-label">Started</div>
+                    <div class="meta-value">{session.formattedTimestamp}</div>
+                </div>
+                
+                <div class="meta-card">
+                    <div class="meta-label">Duration</div>
+                    <div class="meta-value">{session.formattedDuration}</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage Performance (only for successful analyses) -->
         {#if session.stageTiming && !session.stageTiming.isEmpty() && (session.status.name() == 'COMPLETED' || session.status.name() == 'HEALTHY')}
         <section class="stage-timing-section">
             <div class="section-header">
@@ -113,88 +204,28 @@
         </section>
         {/if}
 
-        <!-- Pod Information -->
+        <!-- Model Information -->
         <section class="details-section">
             <div class="section-header">
                 <h2 class="section-title">
-                    <span>Pod Information</span>
+                    <span>Model Information</span>
                 </h2>
             </div>
             <div class="info-grid">
                 <div class="info-item">
-                    <div class="info-label">Namespace</div>
-                    <div class="info-value">{session.namespace}</div>
+                    <div class="info-label">Anomaly Detection Model</div>
+                    <div class="info-value">{detectorModel}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Pod Name</div>
-                    <div class="info-value">{session.podName}</div>
+                    <div class="info-label">RCA Analysis Model</div>
+                    <div class="info-value">{rcaModel}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Validation Model</div>
+                    <div class="info-value">{validatorModel}</div>
                 </div>
             </div>
         </section>
-
-        {#if session.report}
-        <!-- Issue -->
-        <section class="details-section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <span>Issue Detected</span>
-                </h2>
-            </div>
-            <div class="content-box">
-                <h3 class="issue-title">{session.report.title}</h3>
-                <div class="issue-description">{session.report.issue}</div>
-            </div>
-        </section>
-
-        <!-- Evidence -->
-        <section class="details-section">
-            <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
-                <h2 class="section-title">
-                    <span>Evidence</span>
-                </h2>
-                <span class="expand-icon" x-text="evidenceExpanded ? '▲' : '▼'">▼</span>
-            </div>
-            <div class="content-box" x-show="evidenceExpanded" x-collapse>
-                <div class="evidence-content">{session.report.evidence}</div>
-            </div>
-        </section>
-
-        <!-- Supported Logs -->
-        {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
-        <section class="details-section">
-            <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
-                <h2 class="section-title">
-                    <span>Supported Logs</span>
-                </h2>
-                <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▼</span>
-            </div>
-            <div class="content-box logs-box" x-show="logsExpanded" x-collapse>
-                <div class="logs-content">
-                    {#for log in session.report.supportedLogs}
-                    <div class="log-entry">
-                        <span class="log-bullet">•</span>
-                        <span class="log-text">{log}</span>
-                    </div>
-                    {/for}
-                </div>
-            </div>
-        </section>
-        {/if}
-
-        <!-- Proposed Solution (if enabled) -->
-        {#if showProposedSolution && session.report.proposedSolution}
-        <section class="details-section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <span>Proposed Solution</span>
-                </h2>
-            </div>
-            <div class="content-box solution-box">
-                <div class="solution-content">{session.report.proposedSolution}</div>
-            </div>
-        </section>
-        {/if}
-        {/if}
 
         <!-- Session Info -->
         <section class="details-section session-info">
