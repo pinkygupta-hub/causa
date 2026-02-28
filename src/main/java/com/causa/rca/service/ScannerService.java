@@ -1,5 +1,6 @@
 package com.causa.rca.service;
 
+import com.causa.rca.clients.KubernetesMcpClient;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -36,6 +37,9 @@ import java.util.List;
 public class ScannerService {
 
     private static final Logger LOG = Logger.getLogger(ScannerService.class);
+
+    @Inject
+    KubernetesMcpClient kubernetesMcpClient;
 
     @Inject
     KubernetesClient kubernetesClient;
@@ -78,12 +82,20 @@ public class ScannerService {
         String labelKey = labelParts[0];
         String labelValue = labelParts.length > 1 ? labelParts[1] : "";
 
-        // Find pods with the specified label across all namespaces
+        // Find pods with the specified label across all namespaces.
+        // KubernetesMcpClient tries MCP first; if MCP is unreachable it automatically
+        // falls back to direct Fabric8 access.
         LOG.info("Searching for pods with label: " + rcaLabel);
-        List<Pod> pods = kubernetesClient.pods().inAnyNamespace()
-                .withLabel(labelKey, labelValue)
-                .list()
-                .getItems();
+        List<Pod> pods;
+        try {
+            pods = kubernetesMcpClient.listPodsWithLabel(labelKey, labelValue);
+        } catch (Exception e) {
+            LOG.warnf("KubernetesMcpClient.listPodsWithLabel failed (%s), falling back to direct Fabric8", e.getMessage());
+            pods = kubernetesClient.pods().inAnyNamespace()
+                    .withLabel(labelKey, labelValue)
+                    .list()
+                    .getItems();
+        }
 
         if (pods.isEmpty()) {
             LOG.info("No pods found with label: " + rcaLabel);
@@ -132,10 +144,18 @@ public class ScannerService {
         String labelKey = labelParts[0];
         String labelValue = labelParts.length > 1 ? labelParts[1] : "";
 
-        List<Pod> pods = kubernetesClient.pods().inNamespace(namespace)
-                .withLabel(labelKey, labelValue)
-                .list()
-                .getItems();
+        // KubernetesMcpClient tries MCP first; if MCP is unreachable it automatically
+        // falls back to direct Fabric8 access.
+        List<Pod> pods;
+        try {
+            pods = kubernetesMcpClient.listPodsWithLabelInNamespace(namespace, labelKey, labelValue);
+        } catch (Exception e) {
+            LOG.warnf("KubernetesMcpClient.listPodsWithLabelInNamespace failed (%s), falling back to direct Fabric8", e.getMessage());
+            pods = kubernetesClient.pods().inNamespace(namespace)
+                    .withLabel(labelKey, labelValue)
+                    .list()
+                    .getItems();
+        }
 
         if (pods.isEmpty()) {
             LOG.info("No pods found in namespace " + namespace + " with label: " + rcaLabel);

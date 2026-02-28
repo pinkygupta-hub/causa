@@ -1,6 +1,7 @@
 package com.causa.rca.service;
 
 import com.causa.rca.clients.CryostatClient;
+import com.causa.rca.clients.KubernetesMcpClient;
 import com.causa.rca.clients.PrometheusClient;
 import com.causa.rca.model.artifact.CollectedArtifacts;
 import com.causa.rca.model.artifact.EventArtifact;
@@ -60,6 +61,9 @@ public class DataCollectorService {
 
     @Inject
     KubernetesClient kubernetesClient;
+
+    @Inject
+    KubernetesMcpClient kubernetesMcpClient;
 
     @Inject
     @RestClient
