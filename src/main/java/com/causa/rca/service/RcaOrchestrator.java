@@ -12,34 +12,33 @@ import com.causa.rca.ai.ValidationAgent;
 import com.causa.rca.model.RcaReport;
 import com.causa.rca.model.RcaAnalysisSession;
 import com.causa.rca.model.AnalysisStatus;
-
-import io.fabric8.kubernetes.api.model.Pod;
-import io.fabric8.kubernetes.api.model.ContainerStatus;
-
-import java.util.Map;
-import java.util.List;
+import com.causa.rca.model.artifact.CollectedArtifacts;
 
 /**
  * Orchestrator service that coordinates the complete RCA (Root Cause Analysis) pipeline.
- * <p>
- * This service implements a three-step AI-powered analysis workflow:
+ *
+ * <h3>Pipeline steps</h3>
  * <ol>
- *   <li><b>Data Collection:</b> Gathers comprehensive diagnostic data from multiple sources</li>
- *   <li><b>Anomaly Detection:</b> Uses AI to identify if the pod has any issues</li>
- *   <li><b>Root Cause Analysis:</b> Performs deep analysis to determine the underlying cause</li>
- *   <li><b>Validation & Formatting:</b> Validates the analysis and formats it into a structured report</li>
+ *   <li><b>Data Collection</b> – {@link DataCollectorService#collectArtifacts} gathers all
+ *       diagnostic data and packages it into a {@link CollectedArtifacts} object.</li>
+ *   <li><b>Anomaly Detection</b> – {@link AnomalyDetector} receives only the LLM-safe
+ *       context string ({@link CollectedArtifacts#toLlmContext()}).</li>
+ *   <li><b>Root Cause Analysis</b> – {@link RootCauseAnalyst} receives the same compact
+ *       context plus the detected anomaly type.</li>
+ *   <li><b>Validation & Formatting</b> – {@link ValidationAgent} receives the RCA output
+ *       and the compact context to produce a structured {@link RcaReport}.</li>
  * </ol>
- * </p>
- * <p>
- * The orchestrator handles the complete flow from raw data collection through AI analysis
- * to final report generation, including special handling for healthy systems and error cases.
- * </p>
+ *
+ * <h3>LLM data contract</h3>
+ * LLM services receive <b>only</b> {@link CollectedArtifacts#toLlmContext()} — a compact
+ * string built from summaries.  Raw logs, raw events, and full JFR reports are
+ * <b>never</b> passed to LLMs.
  *
  * @see DataCollectorService
  * @see AnomalyDetector
  * @see RootCauseAnalyst
  * @see ValidationAgent
- * @see RcaReport
+ * @see CollectedArtifacts
  */
 @ApplicationScoped
 public class RcaOrchestrator {
@@ -70,52 +69,29 @@ public class RcaOrchestrator {
     @ConfigProperty(name = "quarkus.langchain4j.ollama.validator.chat-model.model-id", defaultValue = "phi3:mini")
     String validatorModel;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url", defaultValue = "http://ollama.default.svc.cluster.local:11434")
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",
+            defaultValue = "http://ollama.default.svc.cluster.local:11434")
     String ollamaBaseUrl;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Public API
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Starts an asynchronous RCA analysis pipeline for a specific pod.
-     * <p>
-     * This method creates a session and returns immediately with the session information.
-     * The actual analysis runs asynchronously in the background.
-     * </p>
+     * Returns immediately with the created session; analysis runs in a background thread.
      *
-     * @param namespace the Kubernetes namespace where the pod is located
-     * @param podName the name of the pod to analyze
-     * @return the created {@link RcaAnalysisSession} with status IN_PROGRESS
+     * @param namespace the Kubernetes namespace
+     * @param podName   the pod name
+     * @return the created {@link RcaAnalysisSession} with status {@code IN_PROGRESS}
      */
     public RcaAnalysisSession startAnalysis(String namespace, String podName) {
         LOG.info("Starting async RCA analysis for: " + namespace + "/" + podName);
 
-        // Create tracking session
         RcaAnalysisSession session = trackingService.createSession(namespace, podName);
         String sessionId = session.sessionId;
-        
-        // Run analysis asynchronously
-        runAnalysisAsync(sessionId, namespace, podName);
-        
-        return session;
-    }
 
-    /**
-     * Executes the complete RCA analysis pipeline asynchronously.
-     * <p>
-     * The analysis proceeds through the following steps:
-     * <ol>
-     *   <li>Collects comprehensive data (metrics, logs, events, JFR, pod status)</li>
-     *   <li>Detects anomalies using AI analysis of the collected data</li>
-     *   <li>If healthy, returns immediately with a healthy status report</li>
-     *   <li>If anomaly detected, performs root cause analysis with detailed reasoning</li>
-     *   <li>Validates and formats the analysis into a structured {@link RcaReport}</li>
-     * </ol>
-     * </p>
-     *
-     * @param sessionId the session ID for tracking
-     * @param namespace the Kubernetes namespace where the pod is located
-     * @param podName the name of the pod to analyze
-     */
-    private void runAnalysisAsync(String sessionId, String namespace, String podName) {
-        // Run in a separate thread to avoid blocking
+        // Run analysis asynchronously in a background thread
         new Thread(() -> {
             try {
                 runAnalysisInternal(sessionId, namespace, podName);
@@ -123,117 +99,136 @@ public class RcaOrchestrator {
                 LOG.error("Error in async analysis for session " + sessionId, e);
             }
         }).start();
+
+        return session;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Internal pipeline
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Internal method that performs the actual RCA analysis.
-     * Uses @ActivateRequestContext to ensure RequestScoped beans work in async thread.
-     * Note: Must be package-private or public for @ActivateRequestContext to work.
+     * Executes the full RCA pipeline synchronously.
+     * {@code @ActivateRequestContext} ensures RequestScoped beans work in the async thread.
      */
     @ActivateRequestContext
     void runAnalysisInternal(String sessionId, String namespace, String podName) {
-
         try {
-            // Step 0: Collect Data
+
+            // ── Step 0: Data Collection ───────────────────────────────────────
             trackingService.recordStageStart(sessionId, "data_collection");
             trackingService.updateStatus(sessionId, AnalysisStatus.COLLECTING_DATA,
-                "Collecting metrics, logs, and events from Kubernetes");
-            
-            Map<String, String> data = dataCollector.getRealDataPackage(namespace, podName);
-            String metricsData = data.get("metrics_data");
-            String fullContext = data.get("full_context");
-            LOG.info("Data collection complete. Metrics summary length: " + (metricsData != null ? metricsData.length() : 0)
-                    + ", Full context length: " + (fullContext != null ? fullContext.length() : 0));
+                    "Collecting metrics, logs, and events from Kubernetes");
+
+            CollectedArtifacts artifacts = dataCollector.collectArtifacts(namespace, podName);
+
+            // The compact LLM context – summaries only, never raw data
+            String llmContext = artifacts.toLlmContext();
+
+            LOG.info("Data collection complete for " + podName
+                    + " | tokens=" + artifacts.tokenCount
+                    + " | truncated=" + artifacts.truncationApplied
+                    + " | llmContextLength=" + llmContext.length());
+            LOG.debug("LLM context:\n" + llmContext);
+
+            // Persist full artifacts to MongoDB so UX can display raw evidence
+            trackingService.storeArtifacts(sessionId, artifacts);
+
             trackingService.recordStageEnd(sessionId, "data_collection");
 
-            // Step 1: Anomaly Detection
+            // ── Step 1: Anomaly Detection ─────────────────────────────────────
             trackingService.recordStageStart(sessionId, "anomaly_detection");
             trackingService.updateStatus(sessionId, AnalysisStatus.DETECTING_ANOMALY,
-                "Analyzing data to detect anomalies using AI");
-            
-            LOG.info("Step 1: Running Anomaly Detection with model: " + detectorModel);
-            LOG.debug("Context for Anomaly Detection:\n" + fullContext);
-            
+                    "Analyzing data to detect anomalies using AI");
+
+            LOG.info("Step 1: Anomaly Detection with model: " + detectorModel);
+
             String rawAnomaly;
             try {
-                rawAnomaly = anomalyDetector.detectAnomaly(fullContext);
+                // LLM receives ONLY the compact summary context
+                rawAnomaly = anomalyDetector.detectAnomaly(llmContext);
                 LOG.info("RAW Anomaly Detector Response: [" + rawAnomaly + "]");
             } catch (Exception e) {
-                String errorMsg = String.format(
-                    "Failed to detect anomaly using model '%s' at %s. " +
-                    "Ensure the model is available: kubectl exec -it <ollama-pod> -- ollama pull %s",
-                    detectorModel, ollamaBaseUrl, detectorModel
-                );
+                String errorMsg = buildModelErrorMessage("anomaly detection", detectorModel, e);
                 LOG.error(errorMsg, e);
                 throw new RuntimeException(errorMsg, e);
             }
 
-            // Sanitize LLM output to get the core anomaly type (first line, before any comments)
+            // Sanitize: take first line, strip comments
             String anomalyType = rawAnomaly.split("\n")[0].split("#")[0].trim();
             LOG.info("Sanitized Anomaly Type: [" + anomalyType + "]");
             trackingService.recordStageEnd(sessionId, "anomaly_detection");
 
-            if (anomalyType.isEmpty() || "HEALTHY".equalsIgnoreCase(anomalyType)
+            if (anomalyType.isEmpty()
+                    || "HEALTHY".equalsIgnoreCase(anomalyType)
                     || anomalyType.toUpperCase().contains("HEALTHY")) {
-                LOG.info("System is healthy or no anomaly detected. Skipping RCA and Validation.");
-                RcaReport healthyReport = new RcaReport("System Healthy", "No anomaly detected",
-                    "Metrics within normal range", null, "No action needed", 1.0);
+                LOG.info("System is healthy – skipping RCA and Validation.");
+                RcaReport healthyReport = new RcaReport(
+                        "System Healthy", "No anomaly detected",
+                        "Metrics within normal range", null,
+                        1.0);
                 trackingService.markHealthy(sessionId, healthyReport);
                 return;
             }
 
-            // Step 2: Root Cause Analysis
+            // ── Step 2: Root Cause Analysis ───────────────────────────────────
             trackingService.recordStageStart(sessionId, "rca_analysis");
             trackingService.updateStatus(sessionId, AnalysisStatus.ANALYZING_RCA,
-                "Performing root cause analysis for detected anomaly: " + anomalyType);
-            
-            LOG.info("Step 2: Running Root Cause Analysis with model: " + rcaModel);
-            LOG.debug("Context for RCA:\n" + fullContext);
-            
+                    "Performing root cause analysis for: " + anomalyType);
+
+            LOG.info("Step 2: Root Cause Analysis with model: " + rcaModel);
+
             String rcaOutput;
             try {
-                rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, fullContext);
+                // LLM receives ONLY the compact summary context
+                rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, llmContext);
                 LOG.info("RAW RCA Result: [" + rcaOutput + "]");
             } catch (Exception e) {
-                String errorMsg = String.format(
-                    "Failed to perform root cause analysis using model '%s' at %s. " +
-                    "Ensure the model is available: kubectl exec -it <ollama-pod> -- ollama pull %s",
-                    rcaModel, ollamaBaseUrl, rcaModel
-                );
+                String errorMsg = buildModelErrorMessage("root cause analysis", rcaModel, e);
                 LOG.error(errorMsg, e);
                 throw new RuntimeException(errorMsg, e);
             }
             trackingService.recordStageEnd(sessionId, "rca_analysis");
 
-            // Step 3: Validation and Formatting
+            // ── Step 3: Validation & Formatting ──────────────────────────────
             trackingService.recordStageStart(sessionId, "validation");
             trackingService.updateStatus(sessionId, AnalysisStatus.VALIDATING,
-                "Validating and formatting analysis results");
-            
-            LOG.info("Step 3: Running Validation and Formatting with model: " + validatorModel);
-            LOG.debug("Context for Validation:\n" + rcaOutput);
-            
+                    "Validating and formatting analysis results");
+
+            LOG.info("Step 3: Validation with model: " + validatorModel);
+
             RcaReport report;
             try {
-                report = reportValidator.validateAndFormat(rcaOutput, fullContext);
-                LOG.info("Final Report Object: " + report);
+                // LLM receives ONLY the compact summary context (not raw logs/events)
+                report = reportValidator.validateAndFormat(rcaOutput, llmContext);
+                LOG.info("Final Report: " + report);
             } catch (Exception e) {
-                String errorMsg = String.format(
-                    "Failed to validate and format report using model '%s' at %s. " +
-                    "Ensure the model is available: kubectl exec -it <ollama-pod> -- ollama pull %s",
-                    validatorModel, ollamaBaseUrl, validatorModel
-                );
+                String errorMsg = buildModelErrorMessage("validation", validatorModel, e);
                 LOG.error(errorMsg, e);
                 throw new RuntimeException(errorMsg, e);
             }
             trackingService.recordStageEnd(sessionId, "validation");
 
-            // Mark as completed
             trackingService.completeSession(sessionId, report);
-            
+
         } catch (Exception e) {
             LOG.error("Error during RCA analysis for session " + sessionId, e);
             trackingService.failSession(sessionId, e.getMessage());
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private String buildModelErrorMessage(String stage, String model, Exception cause) {
+        return String.format(
+                "Failed to perform %s using model '%s' at %s. "
+                + "Ensure the model is available: "
+                + "kubectl exec -it <ollama-pod> -- ollama pull %s. "
+                + "Cause: %s",
+                stage, model, ollamaBaseUrl, model, cause.getMessage());
+    }
 }
+
+// Made with Bob

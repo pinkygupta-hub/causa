@@ -1,5 +1,6 @@
 package com.causa.rca.model;
 
+import com.causa.rca.model.artifact.CollectedArtifacts;
 import io.quarkus.mongodb.panache.common.MongoEntity;
 import io.quarkus.mongodb.panache.PanacheMongoEntity;
 import org.bson.codecs.pojo.annotations.BsonIgnore;
@@ -62,6 +63,16 @@ public class RcaAnalysisSession extends PanacheMongoEntity {
      * The complete RCA report (null until analysis is complete).
      */
     public RcaReport report;
+
+    /**
+     * The collected diagnostic artifacts (metrics, logs, events, pod info, optional JFR).
+     * Stored after data collection completes so that the UX can display full raw evidence
+     * (raw logs, raw events, raw metrics) independently of the LLM analysis.
+     * <p>
+     * Null until the data collection stage completes successfully.
+     * </p>
+     */
+    public CollectedArtifacts collectedArtifacts;
     
     /**
      * Error message if the analysis failed.

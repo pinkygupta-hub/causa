@@ -2,6 +2,15 @@ package com.causa.rca.service;
 
 import com.causa.rca.clients.CryostatClient;
 import com.causa.rca.clients.PrometheusClient;
+import com.causa.rca.model.artifact.CollectedArtifacts;
+import com.causa.rca.model.artifact.EventArtifact;
+import com.causa.rca.model.artifact.EventArtifact.RawEvent;
+import com.causa.rca.model.artifact.JfrArtifact;
+import com.causa.rca.model.artifact.MetricArtifact;
+import com.causa.rca.model.artifact.PodInfoArtifact;
+import com.causa.rca.model.artifact.PodInfoArtifact.ContainerInfo;
+import com.causa.rca.utils.LogOptimizer;
+import com.causa.rca.utils.TokenBudgetEnforcer;
 import com.causa.rca.utils.TokenProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -15,31 +24,34 @@ import org.jboss.logging.Logger;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.Event;
-import java.util.Map;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Service responsible for collecting diagnostic data from various sources.
- * <p>
- * This service aggregates data from multiple sources to provide comprehensive context
- * for root cause analysis:
- * <ul>
- *   <li>Prometheus metrics (CPU, memory usage and limits)</li>
- *   <li>Kubernetes pod status and container states</li>
- *   <li>Kubernetes events related to the pod</li>
- *   <li>Pod logs (current and previous container logs)</li>
- *   <li>JFR (Java Flight Recorder) analysis from Cryostat</li>
- * </ul>
- * </p>
- * <p>
- * The collected data is formatted into structured strings that can be consumed by
- * AI services for anomaly detection and root cause analysis.
- * </p>
+ * Service responsible for collecting diagnostic data from various sources and packaging
+ * it into a structured {@link CollectedArtifacts} object.
  *
- * @see PrometheusClient
- * @see CryostatClient
- * @see RcaOrchestrator
+ * <h3>Data sources</h3>
+ * <ul>
+ *   <li>Prometheus – CPU and memory metrics</li>
+ *   <li>Kubernetes API – pod status, container states, events</li>
+ *   <li>Kubernetes logs – current and previous container logs</li>
+ *   <li>Cryostat – optional JFR analysis (only when {@code cryostat.enabled=true})</li>
+ * </ul>
+ *
+ * <h3>Output contract</h3>
+ * <ul>
+ *   <li>Each artifact separates <b>raw data</b> (for UX) from <b>LLM-safe summaries</b>.</li>
+ *   <li>LLM services must only consume {@link CollectedArtifacts#toLlmContext()}.</li>
+ *   <li>Raw data is preserved in each artifact for dashboard / UX display.</li>
+ *   <li>Token budget is enforced by {@link TokenBudgetEnforcer} (hard cap: 4 000 tokens).</li>
+ * </ul>
+ *
+ * @see LogOptimizer
+ * @see TokenBudgetEnforcer
+ * @see CollectedArtifacts
  */
 @ApplicationScoped
 public class DataCollectorService {
@@ -60,48 +72,267 @@ public class DataCollectorService {
     @Inject
     TokenProvider tokenProvider;
 
+    @Inject
+    LogOptimizer logOptimizer;
+
+    @Inject
+    TokenBudgetEnforcer tokenBudgetEnforcer;
+
     @ConfigProperty(name = "cryostat.enabled", defaultValue = "false")
     boolean cryostatEnabled;
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Primary entry point
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Fetches comprehensive resource metrics for a pod from Prometheus and Kubernetes.
-     * <p>
-     * Collects real-time metrics including:
-     * <ul>
-     *   <li>Memory usage and limits (from container metrics and JVM fallback)</li>
-     *   <li>CPU usage and limits</li>
-     *   <li>Resource requests and limits from Kubernetes API</li>
-     *   <li>Usage percentages relative to limits</li>
-     * </ul>
-     * </p>
-     * <p>
-     * The method uses PromQL queries targeting actual application containers (excluding
-     * sidecar and init containers) and falls back to JVM metrics if container metrics
-     * are unavailable.
+     * Collects all diagnostic data for a pod and returns a structured
+     * {@link CollectedArtifacts} object ready for LLM consumption and UX display.
+     *
+     * <p>Steps performed:
+     * <ol>
+     *   <li>Fetch pod status from Kubernetes API → {@link PodInfoArtifact}</li>
+     *   <li>Fetch Kubernetes events → {@link EventArtifact} (with dedup + summary)</li>
+     *   <li>Fetch Prometheus metrics → {@link MetricArtifact}</li>
+     *   <li>Fetch pod logs → {@link com.causa.rca.model.artifact.LogArtifact} (with dedup + summary)</li>
+     *   <li>Optionally fetch JFR from Cryostat → {@link JfrArtifact}</li>
+     *   <li>Enforce 4 000-token budget via {@link TokenBudgetEnforcer}</li>
+     * </ol>
      * </p>
      *
      * @param namespace the Kubernetes namespace of the pod
-     * @param podName the name of the pod
-     * @return a formatted string containing detailed metrics summary with usage percentages,
-     *         or an error message if collection fails
+     * @param podName   the name of the pod
+     * @return a fully populated {@link CollectedArtifacts}
      */
-    public String fetchMetrics(String namespace, String podName) {
-        LOG.info(">>> Fetching Detailed Metrics for: " + namespace + "/" + podName);
+    public CollectedArtifacts collectArtifacts(String namespace, String podName) {
+        LOG.info("Starting artifact collection for: " + namespace + "/" + podName);
+
+        CollectedArtifacts artifacts = new CollectedArtifacts();
+        artifacts.namespace = namespace;
+        artifacts.podName   = podName;
+
+        // 1. Pod status
+        artifacts.podInfo = fetchPodInfoArtifact(namespace, podName);
+
+        // 2. Events
+        artifacts.events = fetchEventArtifact(namespace, podName);
+
+        // 3. Metrics
+        artifacts.metrics = fetchMetricArtifact(namespace, podName);
+
+        // 4. Logs
+        String rawLogText = fetchRawLogs(namespace, podName);
+        artifacts.logs = logOptimizer.processLogs(rawLogText);
+
+        // 5. JFR (optional – only when cryostat.enabled=true)
+        if (cryostatEnabled) {
+            artifacts.jfr = fetchJfrArtifact(podName);
+        } else {
+            LOG.info("Cryostat disabled – skipping JFR collection.");
+            artifacts.jfr = null;
+        }
+
+        // 6. Enforce token budget (may truncate log representative lines)
+        tokenBudgetEnforcer.enforce(artifacts);
+
+        LOG.info("Artifact collection complete for " + podName
+                + " | tokens=" + artifacts.tokenCount
+                + " | truncated=" + artifacts.truncationApplied);
+
+        return artifacts;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pod info
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches pod phase and container states from the Kubernetes API.
+     *
+     * @param namespace the Kubernetes namespace
+     * @param podName   the pod name
+     * @return a populated {@link PodInfoArtifact}
+     */
+    public PodInfoArtifact fetchPodInfoArtifact(String namespace, String podName) {
+        LOG.info("Fetching pod info for: " + namespace + "/" + podName);
+        PodInfoArtifact artifact = new PodInfoArtifact();
+        artifact.namespace = namespace;
+        artifact.podName   = podName;
+
         try {
-            // 1. Get Pod info from K8s API
             Pod pod = kubernetesClient.pods().inNamespace(namespace).withName(podName).get();
-            String k8sLimits = "N/A";
+            if (pod == null) {
+                artifact.phase = "NotFound";
+                artifact.rawStatusText = "Pod not found";
+                artifact.buildSummary();
+                return artifact;
+            }
+
+            artifact.phase = pod.getStatus().getPhase();
+
+            // Build raw status text (preserved for UX)
+            StringBuilder rawStatus = new StringBuilder();
+            rawStatus.append("Phase: ").append(artifact.phase).append("\n");
+
+            List<ContainerStatus> containerStatuses = pod.getStatus().getContainerStatuses();
+            if (containerStatuses != null) {
+                for (ContainerStatus cs : containerStatuses) {
+                    ContainerInfo ci = new ContainerInfo();
+                    ci.name         = cs.getName();
+                    ci.ready        = Boolean.TRUE.equals(cs.getReady());
+                    ci.restartCount = cs.getRestartCount() != null ? cs.getRestartCount() : 0;
+
+                    rawStatus.append("Container: ").append(ci.name).append("\n");
+                    rawStatus.append("  Ready: ").append(ci.ready).append("\n");
+                    rawStatus.append("  Restart Count: ").append(ci.restartCount).append("\n");
+
+                    // Current state
+                    if (cs.getState() != null) {
+                        if (cs.getState().getRunning() != null) {
+                            ci.currentState = "Running";
+                        } else if (cs.getState().getWaiting() != null) {
+                            String reason = cs.getState().getWaiting().getReason();
+                            ci.currentState    = "Waiting(" + reason + ")";
+                            ci.waitingMessage  = cs.getState().getWaiting().getMessage();
+                            rawStatus.append("  Current State: Waiting (").append(reason).append(")\n");
+                            rawStatus.append("  Message: ").append(ci.waitingMessage).append("\n");
+                        } else if (cs.getState().getTerminated() != null) {
+                            ci.currentState = "Terminated(" + cs.getState().getTerminated().getReason() + ")";
+                        }
+                    }
+
+                    // Last terminated state
+                    if (cs.getLastState() != null && cs.getLastState().getTerminated() != null) {
+                        ci.lastTerminatedReason = cs.getLastState().getTerminated().getReason();
+                        ci.lastExitCode         = cs.getLastState().getTerminated().getExitCode();
+                        ci.lastFinishedAt       = cs.getLastState().getTerminated().getFinishedAt();
+                        rawStatus.append("  Last State: Terminated (").append(ci.lastTerminatedReason).append(")\n");
+                        rawStatus.append("  Exit Code: ").append(ci.lastExitCode).append("\n");
+                        rawStatus.append("  Finished At: ").append(ci.lastFinishedAt).append("\n");
+                    }
+
+                    artifact.containers.add(ci);
+                }
+            }
+
+            artifact.rawStatusText = rawStatus.toString();
+            artifact.buildSummary();
+
+            LOG.info("Pod info collected: " + artifact.summary);
+        } catch (Exception e) {
+            LOG.error("Failed to fetch pod info for " + podName, e);
+            artifact.phase         = "Error";
+            artifact.rawStatusText = "Error fetching pod status: " + e.getMessage();
+            artifact.buildSummary();
+        }
+
+        return artifact;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Events
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches Kubernetes events for the pod and processes them into an {@link EventArtifact}.
+     *
+     * @param namespace the Kubernetes namespace
+     * @param podName   the pod name
+     * @return a populated {@link EventArtifact} with raw, dedup, and summary layers
+     */
+    public EventArtifact fetchEventArtifact(String namespace, String podName) {
+        LOG.info("Fetching K8s events for pod: " + podName);
+        try {
+            // Derive the pod name prefix for matching ReplicaSet/Deployment-owned pods.
+            // Pod names follow the pattern: <deployment>-<rs-hash>-<pod-hash>
+            // We match events whose involvedObject.name equals the pod name OR starts with
+            // the pod name (covers events emitted against the pod itself) OR whose
+            // involvedObject.name is a prefix of the pod name (covers ReplicaSet events).
+            String podPrefix = derivePodPrefix(podName);
+
+            List<Event> k8sEvents = kubernetesClient.v1().events()
+                    .inNamespace(namespace).list().getItems().stream()
+                    .filter(e -> {
+                        if (e.getInvolvedObject() == null) return false;
+                        String objName = e.getInvolvedObject().getName();
+                        if (objName == null) return false;
+                        // Exact match (pod itself)
+                        if (podName.equals(objName)) return true;
+                        // Pod name starts with the object name (e.g. ReplicaSet is prefix of pod)
+                        if (podName.startsWith(objName + "-")) return true;
+                        // Object name starts with pod prefix (e.g. another pod in same RS)
+                        if (!podPrefix.isEmpty() && objName.startsWith(podPrefix)) return true;
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            LOG.info("Gathered " + k8sEvents.size() + " raw events for " + podName
+                    + " (prefix=" + podPrefix + ")");
+
+            // Map to RawEvent value objects
+            List<RawEvent> rawEvents = new ArrayList<>();
+            for (Event e : k8sEvents) {
+                int count = (e.getCount() != null) ? e.getCount() : 1;
+                rawEvents.add(new RawEvent(
+                        e.getLastTimestamp(),
+                        e.getType(),
+                        e.getReason(),
+                        e.getMessage(),
+                        count));
+            }
+
+            return logOptimizer.processEvents(rawEvents);
+
+        } catch (Exception e) {
+            LOG.error("Failed to fetch events for " + podName, e);
+            // Return empty artifact with error note
+            EventArtifact artifact = new EventArtifact();
+            artifact.rawEvents          = List.of();
+            artifact.deduplicatedEvents = List.of();
+            EventArtifact.EventSummary summary = new EventArtifact.EventSummary();
+            summary.totalRawCount      = 0;
+            summary.deduplicatedCount  = 0;
+            summary.byReason           = java.util.Map.of();
+            summary.mostRecentWarnings = List.of("Error fetching events: " + e.getMessage());
+            artifact.summary = summary;
+            return artifact;
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Metrics
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches CPU and memory metrics from Prometheus and Kubernetes resource specs,
+     * returning a structured {@link MetricArtifact}.
+     *
+     * @param namespace the Kubernetes namespace
+     * @param podName   the pod name
+     * @return a populated {@link MetricArtifact}
+     */
+    public MetricArtifact fetchMetricArtifact(String namespace, String podName) {
+        LOG.info("Fetching metrics for: " + namespace + "/" + podName);
+        try {
+            // 1. K8s resource config
+            Pod pod = kubernetesClient.pods().inNamespace(namespace).withName(podName).get();
+            String k8sLimits   = "N/A";
             String k8sRequests = "N/A";
             if (pod != null && pod.getSpec() != null && !pod.getSpec().getContainers().isEmpty()) {
                 var container = pod.getSpec().getContainers().get(0);
-                k8sLimits = container.getResources().getLimits().toString();
-                k8sRequests = container.getResources().getRequests().toString();
+                if (container.getResources() != null) {
+                    if (container.getResources().getLimits() != null) {
+                        k8sLimits = container.getResources().getLimits().toString()
+                                .replace("{", "[").replace("}", "]");
+                    }
+                    if (container.getResources().getRequests() != null) {
+                        k8sRequests = container.getResources().getRequests().toString()
+                                .replace("{", "[").replace("}", "]");
+                    }
+                }
             }
-            LOG.info("K8s API - Limits: " + k8sLimits + ", Requests: " + k8sRequests);
 
-            // 2. Build PromQL queries for Usage, Limits, and Requests
-            // We use 'container!=""' and 'image!=""' to target the actual application
-            // container
+            // 2. PromQL queries
             String currentMemQuery = String.format(
                     "sum(container_memory_usage_bytes{pod=\"%s\", namespace=\"%s\", container!=\"\", image!=\"\"})",
                     podName, namespace);
@@ -112,299 +343,153 @@ public class DataCollectorService {
                     "sum(rate(container_cpu_usage_seconds_total{pod=\"%s\", namespace=\"%s\", container!=\"\", image!=\"\"}[5m]))",
                     podName, namespace);
             String limitCpuQuery = String.format(
-                    "sum(container_spec_cpu_quota{pod=\"%s\", namespace=\"%s\", container!=\"\", image!=\"\"}) / sum(container_spec_cpu_period{pod=\"%s\", namespace=\"%s\", container!=\"\", image!=\"\"})",
+                    "sum(container_spec_cpu_quota{pod=\"%s\", namespace=\"%s\", container!=\"\", image!=\"\"}) / "
+                    + "sum(container_spec_cpu_period{pod=\"%s\", namespace=\"%s\", container!=\"\", image!=\"\"})",
                     podName, namespace, podName, namespace);
 
-            LOG.debug("Mem Usage Query: " + currentMemQuery);
-            LOG.debug("Mem Limit Query: " + limitMemQuery);
+            double memUsageBytes = extractValue(prometheusClient.query(tokenProvider.getToken(), currentMemQuery));
+            double memLimitBytes = extractValue(prometheusClient.query(tokenProvider.getToken(), limitMemQuery));
+            double cpuUsageCores = extractValue(prometheusClient.query(tokenProvider.getToken(), currentCpuQuery));
+            double cpuLimitCores = extractValue(prometheusClient.query(tokenProvider.getToken(), limitCpuQuery));
 
-            JsonNode memUsageRes = prometheusClient.query(tokenProvider.getToken(), currentMemQuery);
-            JsonNode memLimitRes = prometheusClient.query(tokenProvider.getToken(), limitMemQuery);
-            JsonNode cpuUsageRes = prometheusClient.query(tokenProvider.getToken(), currentCpuQuery);
-            JsonNode cpuLimitRes = prometheusClient.query(tokenProvider.getToken(), limitCpuQuery);
-
-            LOG.debug("Prometheus Raw Responses:");
-            LOG.debug("Mem Usage: " + memUsageRes);
-            LOG.debug("Mem Limit: " + memLimitRes);
-
-            double memUsageBytes = extractValue(memUsageRes);
-            double memLimitBytes = extractValue(memLimitRes);
-            double cpuUsageCores = extractValue(cpuUsageRes);
-            double cpuLimitCores = extractValue(cpuLimitRes);
-
-            LOG.info(String.format("Extracted Metrics - MemUsage: %.0f, MemLimit: %.0f, CpuUsage: %.3f, CpuLimit: %.3f",
+            LOG.info(String.format(
+                    "Metrics extracted – mem=%.0f/%.0f cpu=%.3f/%.3f",
                     memUsageBytes, memLimitBytes, cpuUsageCores, cpuLimitCores));
 
-            // 3. Fallback to JVM metrics if container metrics are missing/0
+            // 3. JVM fallback if container metrics are zero
+            boolean jvmFallback = false;
             if (memUsageBytes == 0.0) {
-                LOG.info("Container memory metrics returned 0, attempting JVM fallback...");
+                LOG.info("Container memory metrics = 0, attempting JVM heap fallback...");
                 String jvmMemQuery = String.format(
-                        "sum(jvm_memory_used_bytes{pod=\"%s\", namespace=\"%s\", area=\"heap\"})", podName, namespace);
+                        "sum(jvm_memory_used_bytes{pod=\"%s\", namespace=\"%s\", area=\"heap\"})",
+                        podName, namespace);
                 memUsageBytes = extractValue(prometheusClient.query(tokenProvider.getToken(), jvmMemQuery));
-                LOG.info("JVM Fallback Mem Usage: " + memUsageBytes);
+                jvmFallback   = true;
+                LOG.info("JVM fallback mem usage: " + memUsageBytes);
             }
 
-            // 4. Calculate Percentages
-            double memPercent = (memLimitBytes > 0) ? (memUsageBytes / memLimitBytes) * 100 : 0;
-            double cpuPercent = (cpuLimitCores > 0) ? (cpuUsageCores / cpuLimitCores) * 100 : 0;
+            return MetricArtifact.of(memUsageBytes, memLimitBytes, cpuUsageCores, cpuLimitCores,
+                    k8sLimits, k8sRequests, jvmFallback);
 
-            String summary = String.format("""
-                    --- DETAILED RESOURCE METRICS ---
-                    TARGET: %s/%s
-
-                    K8S RESOURCE CONFIG:
-                      Limits:   %s
-                      Requests: %s
-
-                    PROMETHEUS REAL-TIME DATA:
-                      Memory Usage: %.2f MB (%.2f%% of limit)
-                      Memory Limit: %.2f MB
-                      CPU Usage:    %.3f Cores (%.2f%% of limit)
-                      CPU Limit:    %.3f Cores
-                    ---
-                    """, namespace, podName,
-                    k8sLimits.replace("{", "[").replace("}", "]"),
-                    k8sRequests.replace("{", "[").replace("}", "]"),
-                    memUsageBytes / (1024 * 1024), memPercent, memLimitBytes / (1024 * 1024),
-                    cpuUsageCores, cpuPercent, cpuLimitCores);
-
-            LOG.info("Metric Collection Success for " + podName);
-            return summary;
         } catch (Exception e) {
-            LOG.error("Significant error during Prometheus metric collection for " + podName, e);
-            return "Error fetching detailed metrics: " + e.getMessage();
+            LOG.error("Failed to fetch metrics for " + podName, e);
+            // Return a minimal error artifact so the pipeline can continue
+            MetricArtifact err = new MetricArtifact();
+            err.summary = "metrics-unavailable: " + e.getMessage();
+            return err;
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Logs
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Extracts a numeric value from a Prometheus query response.
+     * Fetches raw pod logs from Kubernetes (last 500 lines).
+     * Falls back to previous container logs if current logs are empty.
+     *
+     * @param namespace the Kubernetes namespace
+     * @param podName   the pod name
+     * @return the raw log text (newline-separated), or an empty string on error
+     */
+    public String fetchRawLogs(String namespace, String podName) {
+        LOG.info("Fetching logs for pod: " + podName);
+        try {
+            String logs = kubernetesClient.pods()
+                    .inNamespace(namespace).withName(podName)
+                    .tailingLines(500).getLog();
+
+            if (logs == null || logs.trim().isEmpty()) {
+                LOG.info("Current logs empty, attempting previous container logs for: " + podName);
+                logs = kubernetesClient.pods()
+                        .inNamespace(namespace).withName(podName)
+                        .terminated().tailingLines(500).getLog();
+            }
+
+            LOG.info("Gathered logs (length: " + (logs != null ? logs.length() : 0) + ")");
+            return (logs != null && !logs.isEmpty()) ? logs : "";
+
+        } catch (Exception e) {
+            LOG.error("Failed to fetch pod logs for " + podName, e);
+            return "";
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // JFR
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Fetches the JFR analysis report from Cryostat and wraps it in a {@link JfrArtifact}.
+     * Only called when {@code cryostat.enabled=true}.
+     *
+     * @param podName the pod name (used as the Cryostat target identifier)
+     * @return a populated {@link JfrArtifact}
+     */
+    public JfrArtifact fetchJfrArtifact(String podName) {
+        LOG.info("Fetching JFR analysis from Cryostat for: " + podName);
+        try {
+            String report = cryostatClient.getReport(tokenProvider.getToken(), podName);
+            LOG.info("JFR report fetched (length: " + (report != null ? report.length() : 0) + ")");
+            return JfrArtifact.of(podName, report);
+        } catch (Exception e) {
+            LOG.error("Failed to fetch JFR report for " + podName, e);
+            return JfrArtifact.of(podName, null);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Derives the deployment/ReplicaSet name prefix from a pod name.
      * <p>
-     * Parses the JSON response structure from Prometheus API and extracts the metric value.
-     * Returns 0.0 if the response is empty or malformed.
+     * Kubernetes pod names follow the pattern: {@code <deployment>-<rs-hash>-<pod-hash>}
+     * where both hashes are 5-character alphanumeric suffixes.
+     * This method strips the last two dash-separated segments to get the deployment prefix,
+     * which is used to match events emitted against the ReplicaSet or Deployment.
+     * </p>
+     * <p>
+     * Example: {@code my-app-7d9f8b6c4-xk2pq} → {@code my-app}
      * </p>
      *
-     * @param result the JsonNode containing the Prometheus query response
-     * @return the extracted metric value, or 0.0 if extraction fails
+     * @param podName the full pod name
+     * @return the deployment prefix, or empty string if the name has fewer than 3 segments
+     */
+    private String derivePodPrefix(String podName) {
+        if (podName == null || podName.isEmpty()) return "";
+        String[] parts = podName.split("-");
+        // Need at least 3 parts: <name>-<rs-hash>-<pod-hash>
+        if (parts.length < 3) return "";
+        // Rejoin all parts except the last two
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < parts.length - 2; i++) {
+            if (i > 0) prefix.append('-');
+            prefix.append(parts[i]);
+        }
+        return prefix.toString();
+    }
+
+    /**
+     * Extracts a numeric value from a Prometheus instant-query response.
+     *
+     * @param result the Prometheus JSON response node
+     * @return the extracted value, or 0.0 if absent / malformed
      */
     private double extractValue(JsonNode result) {
         try {
-            if (result.has("data") && result.get("data").has("result") && result.get("data").get("result").size() > 0) {
+            if (result != null
+                    && result.has("data")
+                    && result.get("data").has("result")
+                    && result.get("data").get("result").size() > 0) {
                 return result.get("data").get("result").get(0).get("value").get(1).asDouble();
             }
         } catch (Exception e) {
-            LOG.warn("Could not extract value from Prometheus response", e);
+            LOG.warn("Could not extract value from Prometheus response: " + e.getMessage());
         }
         return 0.0;
     }
-
-    /**
-     * Fetches Java Flight Recorder (JFR) analysis report from Cryostat.
-     * <p>
-     * Retrieves detailed JVM profiling data including CPU usage, memory allocation,
-     * thread activity, garbage collection statistics, and other JVM-level metrics.
-     * This data is crucial for diagnosing Java application issues.
-     * </p>
-     * <p>
-     * If Cryostat is disabled in configuration, this method returns a message
-     * indicating JFR analysis is unavailable.
-     * </p>
-     *
-     * @param target the target identifier (typically the pod name)
-     * @return the JFR analysis report as a string, or an error/disabled message
-     */
-    public String fetchJfrAnalysis(String target) {
-        if (!cryostatEnabled) {
-            LOG.info("Cryostat is disabled. Skipping JFR analysis fetch.");
-            return "JFR Analysis is disabled.";
-        }
-        LOG.info("Fetching JFR analysis from Cryostat for target: " + target);
-        try {
-            String report = cryostatClient.getReport(tokenProvider.getToken(), target);
-            LOG.info("Gathered JFR report (length: " + (report != null ? report.length() : 0) + ")");
-            return report;
-        } catch (Exception e) {
-            LOG.error("Failed to fetch Cryostat report", e);
-            return "Error fetching JFR analysis: " + e.getMessage();
-        }
-    }
-
-    /**
-     * Fetches pod logs from Kubernetes.
-     * <p>
-     * Attempts to retrieve the last 500 lines of logs from the pod. If the current
-     * container has no logs (e.g., after a restart), it attempts to fetch logs from
-     * the previous terminated container instance.
-     * </p>
-     *
-     * @param namespace the Kubernetes namespace of the pod
-     * @param podName the name of the pod
-     * @return the pod logs as a string (up to 500 lines), or an error message if retrieval fails
-     */
-    public String fetchLogs(String namespace, String podName) {
-        LOG.info("Fetching logs for pod: " + podName);
-        try {
-            // Try current logs first
-            String logs = kubernetesClient.pods().inNamespace(namespace).withName(podName).tailingLines(500).getLog();
-            if (logs == null || logs.trim().isEmpty()) {
-                LOG.info("Current logs empty, attempting to fetch PREVIOUS logs for: " + podName);
-                logs = kubernetesClient.pods().inNamespace(namespace).withName(podName).terminated().tailingLines(500)
-                        .getLog();
-            }
-            LOG.info("Gathered logs (length: " + (logs != null ? logs.length() : 0) + ")");
-            return (logs != null && !logs.isEmpty()) ? logs : "No logs available (even from terminated container)";
-        } catch (Exception e) {
-            LOG.error("Failed to fetch pod logs", e);
-            return "Error fetching logs: " + e.getMessage();
-        }
-    }
-
-    /**
-     * Fetches Kubernetes events related to a specific pod.
-     * <p>
-     * Retrieves all events in the namespace and filters them to include only those
-     * related to the specified pod. Events provide important information about pod
-     * lifecycle, scheduling, health checks, and issues like OOMKilled, ImagePullBackOff, etc.
-     * </p>
-     *
-     * @param namespace the Kubernetes namespace of the pod
-     * @param podName the name of the pod
-     * @return a formatted string containing all relevant events with timestamps, types,
-     *         reasons, and messages, or an error message if retrieval fails
-     */
-    public String fetchEvents(String namespace, String podName) {
-        LOG.info("Fetching K8s Events for pod: " + podName);
-        try {
-            // Fetch events and filter for this pod
-            // Use v1().events() for standard core V1 events which are namespaced
-            List<Event> events = kubernetesClient.v1().events().inNamespace(namespace).list().getItems().stream()
-                    .filter(e -> e.getInvolvedObject() != null && podName.equals(e.getInvolvedObject().getName()))
-                    .collect(Collectors.toList());
-
-            if (events.isEmpty()) {
-                return "No events found for this pod.";
-            }
-
-            StringBuilder sb = new StringBuilder();
-            for (Event e : events) {
-                sb.append(String.format("[%s] Type: %s, Reason: %s, Message: %s\n",
-                        e.getLastTimestamp(), e.getType(), e.getReason(), e.getMessage()));
-            }
-            LOG.info("Gathered " + events.size() + " events.");
-            return sb.toString();
-        } catch (Exception e) {
-            LOG.error("Failed to fetch events", e);
-            return "Error fetching events: " + e.getMessage();
-        }
-    }
-
-    /**
-     * Fetches detailed status information for a pod from Kubernetes.
-     * <p>
-     * Retrieves comprehensive pod status including:
-     * <ul>
-     *   <li>Pod phase (Running, Pending, Failed, etc.)</li>
-     *   <li>Container readiness status</li>
-     *   <li>Restart counts</li>
-     *   <li>Current container state (Running, Waiting, Terminated)</li>
-     *   <li>Last termination state with exit codes and reasons</li>
-     * </ul>
-     * </p>
-     *
-     * @param namespace the Kubernetes namespace of the pod
-     * @param podName the name of the pod
-     * @return a formatted string containing detailed pod and container status information,
-     *         or an error message if retrieval fails
-     */
-    public String fetchPodStatus(String namespace, String podName) {
-        LOG.info("Fetching Kubernetes Pod Status for: " + podName);
-        try {
-            Pod pod = kubernetesClient.pods().inNamespace(namespace).withName(podName).get();
-            if (pod == null)
-                return "Pod not found";
-
-            StringBuilder statusInfo = new StringBuilder();
-            statusInfo.append("Phase: ").append(pod.getStatus().getPhase()).append("\n");
-
-            List<ContainerStatus> containerStatuses = pod.getStatus().getContainerStatuses();
-            for (ContainerStatus cs : containerStatuses) {
-                statusInfo.append("Container: ").append(cs.getName()).append("\n");
-                statusInfo.append("  Ready: ").append(cs.getReady()).append("\n");
-                statusInfo.append("  Restart Count: ").append(cs.getRestartCount()).append("\n");
-
-                if (cs.getState().getWaiting() != null) {
-                    statusInfo.append("  Current State: Waiting (").append(cs.getState().getWaiting().getReason())
-                            .append(")\n");
-                    statusInfo.append("  Message: ").append(cs.getState().getWaiting().getMessage()).append("\n");
-                }
-
-                if (cs.getLastState().getTerminated() != null) {
-                    statusInfo.append("  Last State: Terminated (")
-                            .append(cs.getLastState().getTerminated().getReason()).append(")\n");
-                    statusInfo.append("  Exit Code: ").append(cs.getLastState().getTerminated().getExitCode())
-                            .append("\n");
-                    statusInfo.append("  Finished At: ").append(cs.getLastState().getTerminated().getFinishedAt())
-                            .append("\n");
-                }
-            }
-            return statusInfo.toString();
-        } catch (Exception e) {
-            LOG.error("Failed to fetch pod status", e);
-            return "Error fetching pod status: " + e.getMessage();
-        }
-    }
-
-    /**
-     * Collects and packages all diagnostic data for a pod.
-     * <p>
-     * This is the main orchestration method that gathers data from all sources:
-     * <ul>
-     *   <li>Pod status from Kubernetes</li>
-     *   <li>Kubernetes events</li>
-     *   <li>Resource metrics from Prometheus</li>
-     *   <li>Pod logs</li>
-     *   <li>JFR analysis from Cryostat (if enabled)</li>
-     * </ul>
-     * </p>
-     * <p>
-     * The collected data is formatted into two strings:
-     * <ul>
-     *   <li><b>metrics_data</b>: Summary of resource metrics</li>
-     *   <li><b>full_context</b>: Complete formatted context with all collected data</li>
-     * </ul>
-     * </p>
-     *
-     * @param namespace the Kubernetes namespace of the pod
-     * @param podName the name of the pod
-     * @return a Map containing "metrics_data" and "full_context" keys with their respective
-     *         formatted data strings ready for AI analysis
-     */
-    public Map<String, String> getRealDataPackage(String namespace, String podName) {
-        LOG.info("Starting data collection package for: " + namespace + "/" + podName);
-        String metricsData = fetchMetrics(namespace, podName);
-        String logsData = fetchLogs(namespace, podName);
-        String podStatusData = fetchPodStatus(namespace, podName);
-        String eventsData = fetchEvents(namespace, podName);
-        String jfrData = fetchJfrAnalysis(podName);
-
-        String fullContext = String.format("""
-                --- POD STATUS ---
-                %s
-
-                --- K8S EVENTS ---
-                %s
-
-                --- METRICS ---
-                %s
-
-                --- LOGS (Tail) ---
-                %s
-
-                --- JFR ANALYSIS ---
-                %s
-                """, podStatusData, eventsData, metricsData, logsData, jfrData);
-
-        return Map.of(
-                "metrics_data", metricsData,
-                "full_context", fullContext);
-    }
 }
+
+// Made with Bob
