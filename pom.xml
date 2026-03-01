@@ -102,6 +102,25 @@
             <artifactId>rest-assured</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Apache Lucene for log/event text optimization (tokenization, stop-word removal, dedup) -->
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-core</artifactId>
+            <version>9.10.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-analysis-common</artifactId>
+            <version>9.10.0</version>
+        </dependency>
+
+        <!-- jtokkit: GPT-compatible token counting (tiktoken-java) for token budget enforcement -->
+        <dependency>
+            <groupId>com.knuddels</groupId>
+            <artifactId>jtokkit</artifactId>
+            <version>1.1.0</version>
+        </dependency>
     </dependencies>
 
     <build>
