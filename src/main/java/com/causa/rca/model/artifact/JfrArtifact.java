@@ -73,4 +73,3 @@ public class JfrArtifact {
     }
 }
 
-// Made with Bob

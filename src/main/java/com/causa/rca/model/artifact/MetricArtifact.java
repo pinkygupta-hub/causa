@@ -87,4 +87,3 @@ public class MetricArtifact {
     }
 }
 
-// Made with Bob

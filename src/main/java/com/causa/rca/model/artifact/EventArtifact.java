@@ -165,4 +165,3 @@ public class EventArtifact {
     }
 }
 
-// Made with Bob

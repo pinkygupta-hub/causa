@@ -107,4 +107,3 @@ public class LogArtifact {
     }
 }
 
-// Made with Bob

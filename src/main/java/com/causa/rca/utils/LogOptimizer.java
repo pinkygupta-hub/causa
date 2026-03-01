@@ -306,4 +306,3 @@ public class LogOptimizer {
     }
 }
 
-// Made with Bob
