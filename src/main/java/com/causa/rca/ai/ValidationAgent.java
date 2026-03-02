@@ -41,7 +41,7 @@ public interface ValidationAgent {
             Task: Validate RCA claims using ONLY the provided Context Summaries and format a RcaReport JSON.
             CRITICAL OUTPUT RULES: Output MUST be a single valid JSON object. NO markdown. NO tables. NO prose. NO extra text. NO missing fields
             Inputs: RCA_OUTPUT, CONTEXT_SUMMARIES
-            Method: 1. Extract explicit claims from RCA_OUTPUT. 
+            Method: 1. Extract explicit claims from RCA_OUTPUT.
                     2. Check each claim for direct support in CONTEXT_SUMMARIES.
                     3. Do NOT infer missing data.
                     4. If support is missing, mark validation as failed.
@@ -52,19 +52,33 @@ public interface ValidationAgent {
               "evidence": <what evidence we have for the issue>,
               "supportedLogs": [<what are supported logs present>],
               "validationConfidence": 0.00,
+              "validationNotes": <short validation summary>,
+              "validationChecklist": [<Yes or no with mandatory explantion lines, do this for all validation Checklist rules>]
             }
-
-        Constraints:
-        - Do NOT infer data not present in CONTEXT_SUMMARIES.
-        - Do NOT add fields.
-        - Do NOT change JSON structure.
-        - Do NOT add explanations outside JSON.
-
-        RCA_OUTPUT:{rcaOutput}
-
-        CONTEXT_SUMMARIES:{llmContext}
-
-        Return ONLY the JSON object.
-            """)
+            Validation Checklist Rules:
+            - supportedLogs MUST exist verbatim in CONTEXT_SUMMARIES.
+            - Metrics mentioned MUST exist in CONTEXT_SUMMARIES.
+            - If metrics/logs are absent, mark corresponding checklist items as No.
+            - Critical missing data → validationConfidence between 0.1 and 0.3.
+            - Checklist must be honest and auditable.
+            
+            Checklist requirements:
+            - Use EXACT customer-provided checklist rules items.
+            - Mark each item strictly as Yes or No.
+            
+            Constraints:
+            - Do NOT infer data not present in CONTEXT_SUMMARIES.
+            - Do NOT add fields.
+            - Do NOT change JSON structure.
+            - Do NOT add explanations outside JSON.
+            
+            RCA_OUTPUT:
+            {rcaOutput}
+            
+            CONTEXT_SUMMARIES:
+            {llmContext}
+            
+            Return ONLY the JSON object.
+                        """)
     RcaReport validateAndFormat(@V("rcaOutput") String rcaOutput, @V("llmContext") String llmContext);
 }
