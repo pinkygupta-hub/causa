@@ -1,13 +1,15 @@
 ---
-# PrometheusRule for memory alerts
+# PrometheusRule for memory alerts - OpenShift Configuration
+# Deploy to openshift-monitoring namespace for monitoring integration
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: causa-memory-alerts
-  namespace: monitoring
+  namespace: openshift-monitoring
   labels:
     prometheus: k8s
     role: alert-rules
+    openshift.io/prometheus-rule-evaluation-scope: leaf-prometheus
 spec:
   groups:
   - name: causa-memory-alerts
@@ -41,16 +43,20 @@ spec:
         pod: "{{ $labels.pod }}"
 
 ---
-# Alertmanager configuration with webhook for critical alerts
+# Secret to update Alertmanager configuration with webhook
+# Apply this to update the main Alertmanager configuration
+# Command: oc create secret generic alertmanager-main --from-file=alertmanager.yaml=<this-file> --dry-run=client -o yaml | oc apply -n openshift-monitoring -f -
 apiVersion: v1
 kind: Secret
 metadata:
   name: alertmanager-main
-  namespace: monitoring
+  namespace: openshift-monitoring
 type: Opaque
 stringData:
   alertmanager.yaml: |
     global:
+      http_config:
+        proxy_from_environment: true
       resolve_timeout: 5m
 
     inhibit_rules:
@@ -68,12 +74,6 @@ stringData:
       - severity = warning
       target_matchers:
       - severity = info
-    - equal:
-      - namespace
-      source_matchers:
-      - alertname = InfoInhibitor
-      target_matchers:
-      - severity = info
 
     receivers:
     - name: Default
@@ -84,7 +84,6 @@ stringData:
         send_resolved: false
         http_config:
           follow_redirects: true
-    - name: "null"
 
     route:
       group_by:
@@ -98,15 +97,66 @@ stringData:
         - alertname = Watchdog
         receiver: Watchdog
       - matchers:
-        - alertname = InfoInhibitor
-        receiver: "null"
-      - matchers:
         - alertname =~ causa-.*
         receiver: Critical
         group_wait: 5s
         group_interval: 5s
       - matchers:
         - severity = critical
-        receiver: Default
+        receiver: Critical
         group_wait: 30s
         group_interval: 5m
+
+---
+# NetworkPolicy to allow RCA agent to access user workload monitoring
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-rca-to-thanos-querier
+  namespace: openshift-user-workload-monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: thanos-query
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+    ports:
+    - protocol: TCP
+      port: 9091
+
+---
+# RoleBinding to allow RCA agent to view monitoring resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rca-agent-monitoring-view
+  namespace: openshift-monitoring
+subjects:
+- kind: ServiceAccount
+  name: rca-agent-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Additional RoleBinding for user workload monitoring
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rca-agent-uwm-view
+  namespace: openshift-user-workload-monitoring
+subjects:
+- kind: ServiceAccount
+  name: rca-agent-sa
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: view
+  apiGroup: rbac.authorization.k8s.io
