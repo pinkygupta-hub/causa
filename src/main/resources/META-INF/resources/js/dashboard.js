@@ -185,7 +185,16 @@ function loadDashboard() {
         .catch(error => {
             console.error('Error loading dashboard:', error);
             if (loadingIndicator) {
-                loadingIndicator.innerHTML = '<div class="error-message"><span>⚠</span><span>Failed to load dashboard data</span></div>';
+                const errDiv = document.createElement('div');
+                errDiv.className = 'error-message';
+                const iconSpan = document.createElement('span');
+                iconSpan.textContent = '⚠';
+                const msgSpan = document.createElement('span');
+                msgSpan.textContent = 'Failed to load dashboard data';
+                errDiv.appendChild(iconSpan);
+                errDiv.appendChild(msgSpan);
+                loadingIndicator.textContent = '';
+                loadingIndicator.appendChild(errDiv);
             }
         });
 }
@@ -449,9 +458,15 @@ function analyzePod(namespace, podName) {
     
     // Show loading state on button
     const button = event.target;
-    const originalText = button.innerHTML;
+    const originalChildren = Array.from(button.childNodes).map(n => n.cloneNode(true));
     button.disabled = true;
-    button.innerHTML = '<span>⟳</span><span>Analyzing...</span>';
+    button.textContent = '';
+    const spinSpan = document.createElement('span');
+    spinSpan.textContent = '⟳';
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = 'Analyzing...';
+    button.appendChild(spinSpan);
+    button.appendChild(labelSpan);
     
     // Call RCA analyze API with query parameters
     fetch(`/rca/analyze?namespace=${encodeURIComponent(namespace)}&pod=${encodeURIComponent(podName)}`, {
@@ -481,7 +496,8 @@ function analyzePod(namespace, podName) {
         console.error('Error triggering analysis:', error);
         alert('Failed to trigger analysis. Please try again.');
         button.disabled = false;
-        button.innerHTML = originalText;
+        button.textContent = '';
+        originalChildren.forEach(n => button.appendChild(n));
     });
 }
 
@@ -781,7 +797,13 @@ function showPodPicker(action) {
     const loadingWrapper = document.createElement('div');
     loadingWrapper.className = 'chat-message bot-message';
     loadingWrapper.id = pickerId;
-    loadingWrapper.innerHTML = '<div class="message-bubble"><span class="pod-picker-loading">⏳ Loading analysed pods…</span></div>';
+    const loadingBubble = document.createElement('div');
+    loadingBubble.className = 'message-bubble';
+    const loadingSpan = document.createElement('span');
+    loadingSpan.className = 'pod-picker-loading';
+    loadingSpan.textContent = '⏳ Loading analysed pods…';
+    loadingBubble.appendChild(loadingSpan);
+    loadingWrapper.appendChild(loadingBubble);
     container.appendChild(loadingWrapper);
     container.scrollTop = container.scrollHeight;
 
@@ -792,7 +814,16 @@ function showPodPicker(action) {
             if (!msgEl) return;
 
             if (!sessions.length) {
-                msgEl.innerHTML = '<div class="message-bubble">⚠️ No analyses found. Trigger an analysis from the <strong>Workloads</strong> tab first.</div>';
+                const noAnalysisBubble = document.createElement('div');
+                noAnalysisBubble.className = 'message-bubble';
+                noAnalysisBubble.textContent = '⚠️ No analyses found. Trigger an analysis from the ';
+                const strongEl = document.createElement('strong');
+                strongEl.textContent = 'Workloads';
+                noAnalysisBubble.appendChild(strongEl);
+                const suffixText = document.createTextNode(' tab first.');
+                noAnalysisBubble.appendChild(suffixText);
+                msgEl.textContent = '';
+                msgEl.appendChild(noAnalysisBubble);
                 return;
             }
 
@@ -1279,7 +1310,11 @@ function showTypingIndicator() {
 
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-    bubble.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+    for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'typing-dot';
+        bubble.appendChild(dot);
+    }
 
     wrapper.appendChild(bubble);
     container.appendChild(wrapper);
