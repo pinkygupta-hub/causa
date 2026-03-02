@@ -509,7 +509,7 @@ public class KubernetesMcpClient {
             pods.add(pod);
         }
 
-        LOG.infof("Parsed %d pods from MCP plain-text table", pods.size());
+        LOG.debugf("MCP pods_list: parsed %d pods", pods.size());
         return pods;
     }
 
