@@ -132,13 +132,13 @@
                 <!-- Analyses Table -->
                 <section class="table-section">
                     <h2 class="section-title">Recent Analyses</h2>
-                    {#if error??}
+                    {#if error}
                         <div class="error-message">
                             <span>⚠</span>
                             <span>{error}</span>
                         </div>
                     {/if}
-                    
+
                     {#if analyses.isEmpty()}
                         <div class="empty-state">
                             <div class="empty-icon">📭</div>
@@ -180,13 +180,15 @@
                                                     <div class="progress-fill" style="width: {analysis.progressPercent}%"></div>
                                                 </div>
                                                 <div class="progress-text">{analysis.progressPercent}%</div>
-                                            {#else if analysis.isCompleted()}
-                                                <div class="progress-bar">
-                                                    <div class="progress-fill" style="width: 100%"></div>
-                                                </div>
-                                                <div class="progress-text">100%</div>
                                             {#else}
-                                                <span class="text-muted">—</span>
+                                                {#if analysis.isCompleted()}
+                                                    <div class="progress-bar">
+                                                        <div class="progress-fill" style="width: 100%"></div>
+                                                    </div>
+                                                    <div class="progress-text">100%</div>
+                                                {#else}
+                                                    <span class="text-muted">—</span>
+                                                {/if}
                                             {/if}
                                         </td>
                                         <td class="duration">{analysis.formattedDuration}</td>
@@ -240,7 +242,7 @@
                         <h1>CAUSA</h1>
                         <p class="about-tagline">Intelligent Root Cause Analysis for Kubernetes</p>
                     </div>
-                    
+
                     <div class="about-content">
                         <div class="about-card">
                             <h3>🎯 What is CAUSA?</h3>
@@ -278,6 +280,84 @@
                 </section>
             </div>
         </main>
+    </div>
+
+    <!-- Chatbot Widget -->
+    <!-- Floating toggle button — shown when panel is closed -->
+    <button id="chatbotToggle" class="chatbot-toggle" title="Ask CAUSA AI">
+        <span class="chatbot-toggle-icon">💬</span>
+    </button>
+
+    <!-- Chat Panel — shown when toggle is clicked -->
+    <div id="chatbotWidget" class="chatbot-widget">
+        <div id="chatbotPanel" class="chatbot-panel" style="display: none;">
+            <!-- Chat Header -->
+            <div class="chatbot-header">
+                <div class="chatbot-header-left">
+                    <img src="/logo.png" alt="CAUSA" class="chatbot-logo">
+                    <div>
+                        <div class="chatbot-title">CAUSA AI</div>
+                        <div class="chatbot-subtitle">Root Cause Assistant</div>
+                    </div>
+                </div>
+                <div class="chatbot-header-actions">
+                    <button class="chatbot-change-pod-btn" id="chatbotChangePod" title="Switch pod context" onclick="resetPodContext()" style="display:none;">
+                        🔄 Change Pod
+                    </button>
+                    <button class="chatbot-close" id="chatbotClose" title="Close">✕</button>
+                </div>
+            </div>
+
+            <!-- Active Pod Context Bar -->
+            <div class="chatbot-pod-context" id="chatbotPodContext" style="display:none;">
+                <span class="pod-context-icon">🟢</span>
+                <span class="pod-context-label" id="chatbotPodLabel">No pod selected</span>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="chat-message bot-message">
+                    <div class="message-bubble">
+                        <p>👋 Hi! I'm the CAUSA AI assistant. Ask me something about your Kubernetes issues, or choose a quick action below.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Action Buttons -->
+            <div class="chatbot-quick-actions" id="chatbotQuickActions">
+                <p class="quick-actions-label">Quick Actions for SRE / Dev</p>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="chatQuickAction('explain-root-cause')" title="Plain-English explanation of what broke and why">
+                        <span class="qa-icon">🔍</span>
+                        <span class="qa-label">Explain Root Cause</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="chatQuickAction('immediate-mitigation')" title="kubectl commands and steps to stabilise the workload right now">
+                        <span class="qa-icon">⚡</span>
+                        <span class="qa-label">Immediate Mitigation</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="chatQuickAction('permanent-fix')" title="Recommended solution to prevent recurrence">
+                        <span class="qa-icon">💡</span>
+                        <span class="qa-label">Recommended Solution</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="chatQuickAction('draft-incident-ticket')" title="Pre-filled incident / JIRA ticket ready to copy-paste">
+                        <span class="qa-icon">📋</span>
+                        <span class="qa-label">Draft Incident Ticket</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chatbot-input-area">
+                <div class="chatbot-input-row">
+                    <input type="text" id="chatbotInput" class="chatbot-input"
+                           placeholder="Ask me something..." autocomplete="off"
+                           onkeydown="if(event.key==='Enter') sendChatMessage()">
+                    <button class="chatbot-send-btn" onclick="sendChatMessage()" title="Send">
+                        <span>➤</span>
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="/js/dashboard.js"></script>
