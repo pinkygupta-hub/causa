@@ -25,7 +25,18 @@
         </div>
     </header>
 
-    <div class="dashboard-container" x-data="{ evidenceExpanded: true, logsExpanded: true }">
+    <div class="dashboard-container" x-data="{
+        evidenceExpanded: true,
+        logsExpanded: true,
+        checklistExpanded: true,
+        notesExpanded: true,
+        contextExpanded: false,
+        metricsExpanded: false,
+        eventsExpanded: false,
+        rawLogsExpanded: false,
+        dedupLogsExpanded: false,
+        jfrExpanded: false
+    }">
         <!-- Analysis Header -->
         <section class="analysis-header-section">
             <h1 class="page-title">
@@ -57,7 +68,9 @@
         </section>
         {/if}
 
-        <!-- Pod Information -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 1. POD INFORMATION                                              -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="details-section">
             <div class="section-header">
                 <h2 class="section-title">
@@ -73,15 +86,41 @@
                     <div class="info-label">Pod Name</div>
                     <div class="info-value">{session.podName}</div>
                 </div>
+                {#if session.collectedArtifacts && session.collectedArtifacts.podInfo}
+                <div class="info-item">
+                    <div class="info-label">Last Recorded Phase</div>
+                    <div class="info-value">{session.collectedArtifacts.podInfo.phase}</div>
+                </div>
+                {/if}
+                {#if session.collectedArtifacts && session.collectedArtifacts.podInfo && session.collectedArtifacts.podInfo.containers && !session.collectedArtifacts.podInfo.containers.isEmpty()}
+                <div class="info-item info-item-wide">
+                    <div class="info-label">Container Status</div>
+                    <div class="info-value">
+                        {#for c in session.collectedArtifacts.podInfo.containers}
+                        <div class="container-status-row">
+                            <span class="container-name">{c.name}</span>
+                            <span class="container-badge {c.ready ? 'badge-ready' : 'badge-not-ready'}">{c.ready ? 'Ready' : 'Not Ready'}</span>
+                            <span class="container-detail"><strong>Restart Count:</strong> {c.restartCount}</span>
+                            <span class="container-detail"><strong>Last Recorded State:</strong> {c.currentState}</span>
+                            {#if c.lastTerminatedReason}
+                            <span class="container-detail container-warn"><strong>Last Terminated:</strong> {c.lastTerminatedReason} (exit {c.lastExitCode})</span>
+                            {/if}
+                        </div>
+                        {/for}
+                    </div>
+                </div>
+                {/if}
             </div>
         </section>
 
         {#if session.report}
-        <!-- Issues Detected -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 2. ISSUE DETECTED                                               -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="details-section">
             <div class="section-header">
                 <h2 class="section-title">
-                    <span>Issues Detected</span>
+                    <span>Issue Detected</span>
                 </h2>
             </div>
             <div class="content-box">
@@ -90,7 +129,9 @@
             </div>
         </section>
 
-        <!-- Evidence (Expanded by default) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 3. EVIDENCE                                                      -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="details-section">
             <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
                 <h2 class="section-title">
@@ -103,7 +144,9 @@
             </div>
         </section>
 
-        <!-- Supported Logs (Expanded by default) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 4. SUPPORTED LOGS                                               -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
         <section class="details-section">
             <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
@@ -125,22 +168,45 @@
         </section>
         {/if}
 
-        <!-- Proposed Solution (if enabled) -->
-        {#if showProposedSolution && session.report.proposedSolution}
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 5. VALIDATION SUMMARY (Notes + Checklist)                       -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        {#if session.report.validationNotes || (session.report.validationChecklist && !session.report.validationChecklist.isEmpty())}
         <section class="details-section">
-            <div class="section-header">
+            <div class="section-header expandable" @click="checklistExpanded = !checklistExpanded">
                 <h2 class="section-title">
-                    <span>Proposed Solution</span>
+                    <span>Validation Summary</span>
                 </h2>
+                <span class="expand-icon" x-text="checklistExpanded ? '▲' : '▼'">▲</span>
             </div>
-            <div class="content-box solution-box">
-                <div class="solution-content">{session.report.proposedSolution}</div>
+            <div x-show="checklistExpanded" x-collapse>
+                {#if session.report.validationNotes}
+                <div class="content-box validation-notes-box">
+                    <div class="validation-notes-label">Notes</div>
+                    <div class="evidence-content">{session.report.validationNotes}</div>
+                </div>
+                {/if}
+                {#if session.report.validationChecklist && !session.report.validationChecklist.isEmpty()}
+                <div class="content-box logs-box" style="margin-top: 8px;">
+                    <div class="validation-notes-label">Checklist</div>
+                    <div class="logs-content">
+                        {#for item in session.report.validationChecklist}
+                        <div class="log-entry checklist-entry">
+                            <span class="log-text">{item}</span>
+                        </div>
+                        {/for}
+                    </div>
+                </div>
+                {/if}
             </div>
         </section>
         {/if}
+
         {/if}
 
-        <!-- Analysis Metadata (Status, Started, Duration) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 6. ANALYSIS METADATA                                            -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="details-section">
             <div class="section-header">
                 <h2 class="section-title">
@@ -154,20 +220,30 @@
                         <span>{session.status.displayName}</span>
                     </div>
                 </div>
-                
                 <div class="meta-card">
                     <div class="meta-label">Started</div>
                     <div class="meta-value">{session.formattedTimestamp}</div>
                 </div>
-                
                 <div class="meta-card">
                     <div class="meta-label">Duration</div>
                     <div class="meta-value">{session.formattedDuration}</div>
                 </div>
+                {#if session.collectedArtifacts}
+                <div class="meta-card">
+                    <div class="meta-label">Token Count (Used For Context)</div>
+                    <div class="meta-value">{session.collectedArtifacts.tokenCount}
+                        {#if session.collectedArtifacts.truncationApplied}
+                        <span class="truncation-badge">truncated</span>
+                        {/if}
+                    </div>
+                </div>
+                {/if}
             </div>
         </section>
 
-        <!-- Stage Performance (only for successful analyses) -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 7. STAGE PERFORMANCE                                            -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         {#if session.stageTiming && !session.stageTiming.isEmpty() && (session.status.name() == 'COMPLETED' || session.status.name() == 'HEALTHY')}
         <section class="stage-timing-section">
             <div class="section-header">
@@ -204,7 +280,171 @@
         </section>
         {/if}
 
-        <!-- Model Information -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 8. CONTEXT DETAILS (Collected Artifacts — all collapsible)      -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        {#if session.collectedArtifacts}
+        <section class="details-section context-details-section">
+            <div class="section-header expandable" @click="contextExpanded = !contextExpanded">
+                <h2 class="section-title">
+                    <span>Context Details</span>
+                </h2>
+                <span class="expand-icon" x-text="contextExpanded ? '▲' : '▼'">▼</span>
+            </div>
+            <div x-show="contextExpanded" x-collapse>
+
+                <!-- 8a. Metrics -->
+                {#if session.collectedArtifacts.metrics}
+                <div class="artifact-subsection">
+                    <div class="artifact-header expandable" @click="metricsExpanded = !metricsExpanded">
+                        <span class="artifact-title">📊 Metrics</span>
+                        <span class="expand-icon small" x-text="metricsExpanded ? '▲' : '▼'">▼</span>
+                    </div>
+                    <div x-show="metricsExpanded" x-collapse>
+                        <div class="artifact-grid">
+                            <div class="artifact-metric">
+                                <span class="metric-label">Memory Usage</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.memoryUsageBytes.toFixed(2)} bytes</span>
+                            </div>
+                            <div class="artifact-metric">
+                                <span class="metric-label">Memory Limit</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.memoryLimitBytes.toFixed(2)} bytes</span>
+                            </div>
+                            <div class="artifact-metric">
+                                <span class="metric-label">Memory %</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.memoryUsagePercent.toFixed(2)}%</span>
+                            </div>
+                            <div class="artifact-metric">
+                                <span class="metric-label">CPU Usage</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.cpuUsageCores.toFixed(2)} cores</span>
+                            </div>
+                            <div class="artifact-metric">
+                                <span class="metric-label">CPU Limit</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.cpuLimitCores.toFixed(2)} cores</span>
+                            </div>
+                            <div class="artifact-metric">
+                                <span class="metric-label">CPU %</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.cpuUsagePercent.toFixed(2)}%</span>
+                            </div>
+                        </div>
+                        <div class="artifact-summary-box">
+                            <span class="artifact-summary-label">LLM Summary:</span>
+                            <span class="artifact-summary-value mono">{session.collectedArtifacts.metrics.summary}</span>
+                        </div>
+                    </div>
+                </div>
+                {/if}
+
+                <!-- 8b. Events -->
+                {#if session.collectedArtifacts.events}
+                <div class="artifact-subsection">
+                    <div class="artifact-header expandable" @click="eventsExpanded = !eventsExpanded">
+                        <span class="artifact-title">⚡ Events</span>
+                        {#if session.collectedArtifacts.events.summary}
+                        <span class="artifact-count-badge">
+                            {session.collectedArtifacts.events.summary.totalRawCount} raw /
+                            {session.collectedArtifacts.events.summary.deduplicatedCount} dedup
+                        </span>
+                        {/if}
+                        <span class="expand-icon small" x-text="eventsExpanded ? '▲' : '▼'">▼</span>
+                    </div>
+                    <div x-show="eventsExpanded" x-collapse>
+                        {#if session.collectedArtifacts.events.rawEvents && !session.collectedArtifacts.events.rawEvents.isEmpty()}
+                        <div class="logs-content artifact-logs">
+                            {#for event in session.collectedArtifacts.events.rawEvents}
+                            <div class="log-entry event-entry {event.type == 'Warning' ? 'event-warning' : 'event-normal'}">
+                                <span class="event-type-badge">{event.type}</span>
+                                <span class="event-reason">{event.reason}</span>
+                                <span class="event-count">×{event.count}</span>
+                                <span class="event-time">{event.lastTimestamp}</span>
+                                <span class="log-text">{event.message}</span>
+                            </div>
+                            {/for}
+                        </div>
+                        {/if}
+                    </div>
+                </div>
+                {/if}
+
+                <!-- 8c. Logs -->
+                {#if session.collectedArtifacts.logs}
+                <div class="artifact-subsection">
+                    <div class="artifact-header">
+                        <span class="artifact-title">📋 Logs</span>
+                        {#if session.collectedArtifacts.logs.summary}
+                        <span class="artifact-count-badge">
+                            {session.collectedArtifacts.logs.summary.totalRawLines} raw /
+                            {session.collectedArtifacts.logs.summary.deduplicatedLineCount} dedup
+                        </span>
+                        <span class="badge-error">{session.collectedArtifacts.logs.summary.errorCount} Errors</span>
+                        <span class="badge-warn">{session.collectedArtifacts.logs.summary.warnCount} Warnings</span>
+                        <span class="badge-info">{session.collectedArtifacts.logs.summary.infoCount} Info</span>
+                        {/if}
+                    </div>
+
+                    <!-- Raw Logs -->
+                    {#if session.collectedArtifacts.logs.rawLines && !session.collectedArtifacts.logs.rawLines.isEmpty()}
+                    <div class="artifact-sub-header expandable" @click="rawLogsExpanded = !rawLogsExpanded">
+                        <span class="artifact-sub-title">Raw Logs ({session.collectedArtifacts.logs.rawLines.size()} lines)</span>
+                        <span class="expand-icon small" x-text="rawLogsExpanded ? '▲' : '▼'">▼</span>
+                    </div>
+                    <div x-show="rawLogsExpanded" x-collapse>
+                        <div class="logs-content artifact-logs raw-logs-box">
+                            {#for line in session.collectedArtifacts.logs.rawLines}
+                            <div class="log-entry raw-log-line">
+                                <span class="log-text">{line}</span>
+                            </div>
+                            {/for}
+                        </div>
+                    </div>
+                    {/if}
+
+                    <!-- Deduplicated Logs -->
+                    {#if session.collectedArtifacts.logs.deduplicatedLines && !session.collectedArtifacts.logs.deduplicatedLines.isEmpty()}
+                    <div class="artifact-sub-header expandable" @click="dedupLogsExpanded = !dedupLogsExpanded">
+                        <span class="artifact-sub-title">Deduplicated Logs ({session.collectedArtifacts.logs.deduplicatedLines.size()} lines)</span>
+                        <span class="expand-icon small" x-text="dedupLogsExpanded ? '▲' : '▼'">▼</span>
+                    </div>
+                    <div x-show="dedupLogsExpanded" x-collapse>
+                        <div class="logs-content artifact-logs raw-logs-box">
+                            {#for line in session.collectedArtifacts.logs.deduplicatedLines}
+                            <div class="log-entry">
+                                <span class="log-text">{line}</span>
+                            </div>
+                            {/for}
+                        </div>
+                    </div>
+                    {/if}
+                </div>
+                {/if}
+
+                <!-- 8d. JFR (optional) -->
+                {#if session.collectedArtifacts.jfr}
+                <div class="artifact-subsection">
+                    <div class="artifact-header expandable" @click="jfrExpanded = !jfrExpanded">
+                        <span class="artifact-title">☕ JFR Analysis</span>
+                        <span class="artifact-count-badge">{session.collectedArtifacts.jfr.rawReportLength} chars</span>
+                        <span class="expand-icon small" x-text="jfrExpanded ? '▲' : '▼'">▼</span>
+                    </div>
+                    <div x-show="jfrExpanded" x-collapse>
+                        <div class="content-box logs-box">
+                            <div class="logs-content">
+                                <div class="log-entry">
+                                    <span class="log-text">{session.collectedArtifacts.jfr.rawReport}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {/if}
+
+            </div>
+        </section>
+        {/if}
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 9. MODEL INFORMATION + SESSION ID                               -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="details-section">
             <div class="section-header">
                 <h2 class="section-title">
@@ -227,7 +467,6 @@
             </div>
         </section>
 
-        <!-- Session Info -->
         <section class="details-section session-info">
             <div class="info-footer">
                 <div class="info-item">

@@ -59,9 +59,6 @@ public class DashboardResource {
     @Inject
     KubernetesClient kubernetesClient;
     
-    @ConfigProperty(name = "rca.dashboard.show-proposed-solution", defaultValue = "false")
-    boolean showProposedSolution;
-    
     @ConfigProperty(name = "rca.dashboard.page-size", defaultValue = "50")
     int defaultPageSize;
     
@@ -147,7 +144,6 @@ public class DashboardResource {
             // Render template
             TemplateInstance template = analysisDetails
                     .data("session", session)
-                    .data("showProposedSolution", showProposedSolution)
                     .data("detectorModel", detectorModel)
                     .data("rcaModel", rcaModel)
                     .data("validatorModel", validatorModel);

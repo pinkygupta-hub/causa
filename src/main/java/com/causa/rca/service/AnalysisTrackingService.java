@@ -3,6 +3,7 @@ package com.causa.rca.service;
 import com.causa.rca.model.RcaAnalysisSession;
 import com.causa.rca.model.AnalysisStatus;
 import com.causa.rca.model.RcaReport;
+import com.causa.rca.model.artifact.CollectedArtifacts;
 import com.causa.rca.repository.RcaAnalysisRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -154,6 +155,36 @@ public class AnalysisTrackingService {
         return true;
     }
     
+    /**
+     * Stores the collected diagnostic artifacts on the session document.
+     * <p>
+     * Called immediately after data collection completes so that raw evidence
+     * (logs, events, metrics, pod info) is persisted to MongoDB and available
+     * for UX display regardless of whether the LLM analysis succeeds.
+     * </p>
+     *
+     * @param sessionId the unique session identifier
+     * @param artifacts the collected artifacts to persist
+     * @return true if update was successful, false if session not found
+     */
+    public boolean storeArtifacts(String sessionId, CollectedArtifacts artifacts) {
+        Optional<RcaAnalysisSession> optSession = repository.findBySessionId(sessionId);
+
+        if (optSession.isEmpty()) {
+            LOG.warnf("Attempted to store artifacts for non-existent session: %s", sessionId);
+            return false;
+        }
+
+        RcaAnalysisSession session = optSession.get();
+        session.collectedArtifacts = artifacts;
+        repository.update(session);
+
+        LOG.infof("Stored collected artifacts for session %s (tokens=%d, truncated=%b)",
+                sessionId, artifacts.tokenCount, artifacts.truncationApplied);
+
+        return true;
+    }
+
     /**
      * Marks an analysis session as completed with the final report.
      * <p>

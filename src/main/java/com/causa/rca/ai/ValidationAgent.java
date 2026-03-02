@@ -8,67 +8,63 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 
 /**
  * AI service interface for validating and formatting RCA analysis results.
- * <p>
- * This service performs the final step in the RCA pipeline by critiquing the root cause
- * analysis output and formatting it into a structured {@link RcaReport} object. It ensures
- * the analysis is comprehensive, logical, and properly formatted for consumption.
- * </p>
- * <p>
- * The validation includes reviewing the proposed fix for feasibility and completeness,
- * then structuring all the information (issue, evidence, logs, solution, confidence)
- * into a standardized report format.
- * </p>
+ *
+ * <p>Receives a <b>compact, LLM-safe summary context</b> produced by
+ * {@link com.causa.rca.model.artifact.CollectedArtifacts#toLlmContext()}.
+ * This context contains only pre-processed summaries — never raw log lines,
+ * raw event dumps, or full JFR reports.</p>
+ *
+ * <p>This is the final step in the RCA pipeline.</p>
  *
  * @see AnomalyDetector
  * @see RootCauseAnalyst
  * @see RcaReport
+ * @see com.causa.rca.model.artifact.CollectedArtifacts
  */
 @RegisterAiService(modelName = "validator")
 public interface ValidationAgent {
 
     /**
-     * Validates the RCA output and formats it into a structured report.
-     * <p>
-     * Reviews the root cause analysis for quality and completeness, provides a critique
-     * of the proposed solution, and then formats all information into a structured
-     * {@link RcaReport} object with proper fields including title, issue description,
-     * evidence, supporting logs, proposed solution, and validation confidence score.
-     * </p>
+     * Validates the RCA output and formats it into a structured {@link RcaReport}.
      *
-     * @param rcaOutput the raw root cause analysis output from the {@link RootCauseAnalyst}
-     *                  containing the detailed analysis and proposed fix
-     * @param fullContext the complete original context data including pod status, events,
-     *                    metrics, logs, and JFR analysis used for validation
-     * @return a structured {@link RcaReport} object containing the validated and formatted
-     *         RCA information ready for presentation
+     * <p>The {@code llmContext} parameter contains pre-processed, token-budgeted
+     * summaries of pod status, metrics, events, and representative log lines.
+     * Raw logs and raw events are <b>never</b> included.</p>
+     *
+     * @param rcaOutput  the root cause analysis text from {@link RootCauseAnalyst}
+     * @param llmContext the compact summary context from
+     *                   {@link com.causa.rca.model.artifact.CollectedArtifacts#toLlmContext()}
+     * @return a structured {@link RcaReport} ready for presentation
      */
     @UserMessage("""
-            You are the Validation Agent. Your task is to validate the RCA output and format it into a structured RcaReport JSON object.
-
-            You MUST return a valid JSON object with these EXACT fields:
+            Role: Validation Agent and JSON Generator.
+            Task: Validate RCA claims using ONLY the provided Context Summaries and format a RcaReport JSON.
+            CRITICAL OUTPUT RULES: Output MUST be a single valid JSON object. NO markdown. NO tables. NO prose. NO extra text. NO missing fields
+            Inputs: RCA_OUTPUT, CONTEXT_SUMMARIES
+            Method: 1. Extract explicit claims from RCA_OUTPUT. 
+                    2. Check each claim for direct support in CONTEXT_SUMMARIES.
+                    3. Do NOT infer missing data.
+                    4. If support is missing, mark validation as failed.
+            Output: Return ONE valid JSON object with EXACT fields: (ALL FIELDS REQUIRED)
             {
-              "title": "Brief title summarizing the issue (e.g., 'OOM Killed - Memory Limit Exceeded')",
-              "issue": "Detailed description of what went wrong and why",
-              "evidence": "Key metrics, observations, and data points supporting the diagnosis",
-              "supportedLogs": ["Array of relevant log entries or patterns"],
-              "proposedSolution": "Concrete, actionable steps to fix the issue",
-              "validationConfidence": 0.00
+              "title": <valid title describing the issue>,
+              "issue": <what was the issue in 2-3 sentences>,
+              "evidence": <what evidence we have for the issue>,
+              "supportedLogs": [<what are supported logs present>],
+              "validationConfidence": 0.00,
             }
 
-            IMPORTANT:
-            - Extract the issue description from the RCA output
-            - Include specific metrics and values in the evidence field
-            - Provide actionable solutions, not generic advice
-            - Set validationConfidence between 0.0 and 1.0 based on how confident you are
-            - If any field is missing from RCA output, infer it from the context
+        Constraints:
+        - Do NOT infer data not present in CONTEXT_SUMMARIES.
+        - Do NOT add fields.
+        - Do NOT change JSON structure.
+        - Do NOT add explanations outside JSON.
 
-            RCA Output to Validate:
-            {rcaOutput}
+        RCA_OUTPUT:{rcaOutput}
 
-            Original Context:
-            {fullContext}
+        CONTEXT_SUMMARIES:{llmContext}
 
-            Return ONLY the JSON object, no other text.
+        Return ONLY the JSON object.
             """)
-    RcaReport validateAndFormat(@V("rcaOutput") String rcaOutput, @V("fullContext") String fullContext);
+    RcaReport validateAndFormat(@V("rcaOutput") String rcaOutput, @V("llmContext") String llmContext);
 }

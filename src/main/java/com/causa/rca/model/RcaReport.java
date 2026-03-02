@@ -7,7 +7,8 @@ import java.util.List;
  * Data model representing a Root Cause Analysis (RCA) report.
  * <p>
  * This class encapsulates the complete results of an RCA analysis, including the identified
- * issue, supporting evidence, relevant logs, proposed solution, and a confidence score.
+ * issue, supporting evidence, relevant logs, validation notes, a validation checklist,
+ * and a confidence score.
  * It serves as the final output of the RCA pipeline and is returned to clients via the REST API.
  * </p>
  * <p>
@@ -23,10 +24,10 @@ public class RcaReport {
 
     // Box formatting constants
     private static final int BOX_TOTAL_WIDTH = 86;
-    private static final int BOX_CONTENT_WIDTH = BOX_TOTAL_WIDTH - 2; // Excluding border characters
+    private static final int BOX_CONTENT_WIDTH = BOX_TOTAL_WIDTH - 2;
     private static final int TITLE_MAX_LENGTH = 76;
     private static final int CONFIDENCE_LABEL_WIDTH = 60;
-    private static final int MAX_WORD_LENGTH = BOX_CONTENT_WIDTH - 2; // Max length before hard wrapping
+    private static final int MAX_WORD_LENGTH = BOX_CONTENT_WIDTH - 2;
 
     /**
      * The title or summary of the RCA report.
@@ -53,18 +54,25 @@ public class RcaReport {
     public List<String> supportedLogs;
 
     /**
-     * The proposed solution to remediate the identified issue.
-     * Includes actionable steps and recommendations to fix the problem.
-     */
-    public String proposedSolution;
-
-    /**
      * Confidence score of the validation (0.0 to 1.0).
-     * Represents how confident the validation agent is in the analysis and proposed
-     * solution.
+     * Represents how confident the validation agent is in the analysis.
      * Higher values indicate greater confidence in the RCA results.
      */
     public Double validationConfidence;
+
+    /**
+     * Free-text notes from the validation agent explaining the validation outcome.
+     * Describes what was verified, what was missing, and why the confidence score was assigned.
+     */
+    public String validationNotes;
+
+    /**
+     * Structured checklist produced by the validation agent.
+     * Each entry is a "Yes/No" item indicating whether a specific claim in the RCA
+     * was directly supported by the collected context summaries.
+     * Example: ["Metrics confirm OOM: Yes", "Log evidence present: No"]
+     */
+    public List<String> validationChecklist;
 
     /**
      * Default constructor for JSON deserialization and reflection.
@@ -75,21 +83,42 @@ public class RcaReport {
     /**
      * Constructs a complete RCA report with all fields.
      *
-     * @param title the title or summary of the report
-     * @param issue detailed description of the identified issue
-     * @param evidence supporting evidence for the root cause
-     * @param supportedLogs list of relevant log entries
-     * @param proposedSolution the recommended solution
+     * @param title               the title or summary of the report
+     * @param issue               detailed description of the identified issue
+     * @param evidence            supporting evidence for the root cause
+     * @param supportedLogs       list of relevant log entries
      * @param validationConfidence confidence score (0.0 to 1.0)
+     * @param validationNotes     free-text validation notes
+     * @param validationChecklist structured Yes/No checklist items
      */
-    public RcaReport(String title, String issue, String evidence, List<String> supportedLogs, String proposedSolution,
-            Double validationConfidence) {
-        this.title = title;
-        this.issue = issue;
-        this.evidence = evidence;
-        this.supportedLogs = supportedLogs;
-        this.proposedSolution = proposedSolution;
+    public RcaReport(String title, String issue, String evidence,
+                     List<String> supportedLogs,
+                     Double validationConfidence,
+                     String validationNotes,
+                     List<String> validationChecklist) {
+        this.title               = title;
+        this.issue               = issue;
+        this.evidence            = evidence;
+        this.supportedLogs       = supportedLogs;
         this.validationConfidence = validationConfidence;
+        this.validationNotes     = validationNotes;
+        this.validationChecklist = validationChecklist;
+    }
+
+    /**
+     * Convenience constructor for simple healthy/error reports that don't need
+     * validation notes or checklist.
+     *
+     * @param title               the title
+     * @param issue               the issue description
+     * @param evidence            the evidence
+     * @param supportedLogs       supported log entries
+     * @param validationConfidence confidence score
+     */
+    public RcaReport(String title, String issue, String evidence,
+                     List<String> supportedLogs,
+                     Double validationConfidence) {
+        this(title, issue, evidence, supportedLogs, validationConfidence, null, null);
     }
 
     @Override
@@ -105,9 +134,6 @@ public class RcaReport {
         sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
         sb.append("║ Evidence:                                                                          ║\n");
         appendWrapped(sb, evidence, BOX_TOTAL_WIDTH);
-        sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
-        sb.append("║ Proposed Solution:                                                                 ║\n");
-        appendWrapped(sb, proposedSolution, BOX_TOTAL_WIDTH);
         if (supportedLogs != null && !supportedLogs.isEmpty()) {
             sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
             sb.append("║ Supported Logs:                                                                    ║\n");
@@ -118,65 +144,60 @@ public class RcaReport {
         sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
         sb.append(String.format("║ Validation Confidence: %-" + CONFIDENCE_LABEL_WIDTH + ".2f║\n",
                 validationConfidence != null ? validationConfidence : 0.0));
+        if (validationNotes != null && !validationNotes.isBlank()) {
+            sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
+            sb.append("║ Validation Notes:                                                                  ║\n");
+            appendWrapped(sb, validationNotes, BOX_TOTAL_WIDTH);
+        }
+        if (validationChecklist != null && !validationChecklist.isEmpty()) {
+            sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
+            sb.append("║ Validation Checklist:                                                              ║\n");
+            for (String item : validationChecklist) {
+                appendWrapped(sb, "  • " + item, BOX_TOTAL_WIDTH);
+            }
+        }
         sb.append("╚════════════════════════════════════════════════════════════════════════════════════╝\n");
         return sb.toString();
     }
 
     private String truncate(String str, int maxLength) {
-        if (str == null)
-            return "";
+        if (str == null) return "";
         return str.length() > maxLength ? str.substring(0, maxLength - 3) + "..." : str;
     }
 
     private void appendWrapped(StringBuilder sb, String text, int width) {
-        // Handle null, empty, or whitespace-only text
         if (text == null || text.trim().isEmpty()) {
             StringBuilder naLine = new StringBuilder("║ N/A");
-            while (naLine.length() < width - 1) {
-                naLine.append(" ");
-            }
+            while (naLine.length() < width - 1) naLine.append(" ");
             naLine.append("║\n");
             sb.append(naLine);
             return;
         }
-        
+
         String[] words = text.split("\\s+");
-        
-        // Handle case where split results in empty array (shouldn't happen with trim check, but defensive)
         if (words.length == 0) {
             StringBuilder naLine = new StringBuilder("║ N/A");
-            while (naLine.length() < width - 1) {
-                naLine.append(" ");
-            }
+            while (naLine.length() < width - 1) naLine.append(" ");
             naLine.append("║\n");
             sb.append(naLine);
             return;
         }
-        
+
         StringBuilder line = new StringBuilder("║ ");
         for (String word : words) {
-            // Handle extremely long unbroken tokens with hard wrapping
             if (word.length() > MAX_WORD_LENGTH) {
-                // Flush current line if it has content
                 if (line.length() > 2) {
-                    while (line.length() < width - 1) {
-                        line.append(" ");
-                    }
+                    while (line.length() < width - 1) line.append(" ");
                     line.append("║\n");
                     sb.append(line);
                     line = new StringBuilder("║ ");
                 }
-                
-                // Hard wrap the long word character by character
                 int pos = 0;
                 while (pos < word.length()) {
                     int chunkSize = Math.min(MAX_WORD_LENGTH, word.length() - pos);
                     String chunk = word.substring(pos, pos + chunkSize);
-                    
                     line.append(chunk);
-                    while (line.length() < width - 1) {
-                        line.append(" ");
-                    }
+                    while (line.length() < width - 1) line.append(" ");
                     line.append("║\n");
                     sb.append(line);
                     line = new StringBuilder("║ ");
@@ -184,27 +205,19 @@ public class RcaReport {
                 }
                 continue;
             }
-            
-            // Normal word wrapping
             if (line.length() + word.length() + 1 >= width - 1) {
-                // Pad the line to width - 1
-                while (line.length() < width - 1) {
-                    line.append(" ");
-                }
+                while (line.length() < width - 1) line.append(" ");
                 line.append("║\n");
                 sb.append(line);
                 line = new StringBuilder("║ ");
             }
             line.append(word).append(" ");
         }
-        
-        // Pad and append the last line if it has content
         if (line.length() > 2) {
-            while (line.length() < width - 1) {
-                line.append(" ");
-            }
+            while (line.length() < width - 1) line.append(" ");
             line.append("║\n");
             sb.append(line);
         }
     }
 }
+
