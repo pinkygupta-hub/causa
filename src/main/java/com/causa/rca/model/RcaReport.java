@@ -67,12 +67,24 @@ public class RcaReport {
     public String validationNotes;
 
     /**
-     * Structured checklist produced by the validation agent.
-     * Each entry is a "Yes/No" item indicating whether a specific claim in the RCA
-     * was directly supported by the collected context summaries.
-     * Example: ["Metrics confirm OOM: Yes", "Log evidence present: No"]
+     * Overall validation assessment summary (2-3 lines).
      */
-    public List<String> validationChecklist;
+    public String validationSummary;
+
+    /**
+     * Structured per-claim validation trace produced by the validation agent.
+     */
+    public List<ValidationTraceItem> validationTrace;
+
+    /**
+     * Missing data signals that were required but not found.
+     */
+    public List<String> missingData;
+
+    /**
+     * Risk factors that reduce reliability of the analysis.
+     */
+    public List<String> riskFactors;
 
     /**
      * Default constructor for JSON deserialization and reflection.
@@ -89,20 +101,20 @@ public class RcaReport {
      * @param supportedLogs       list of relevant log entries
      * @param validationConfidence confidence score (0.0 to 1.0)
      * @param validationNotes     free-text validation notes
-     * @param validationChecklist structured Yes/No checklist items
+     * @param validationTrace  validation output
      */
     public RcaReport(String title, String issue, String evidence,
                      List<String> supportedLogs,
                      Double validationConfidence,
                      String validationNotes,
-                     List<String> validationChecklist) {
+                     List<ValidationTraceItem> validationTrace) {
         this.title               = title;
         this.issue               = issue;
         this.evidence            = evidence;
         this.supportedLogs       = supportedLogs;
         this.validationConfidence = validationConfidence;
         this.validationNotes     = validationNotes;
-        this.validationChecklist = validationChecklist;
+        this.validationTrace = validationTrace;
     }
 
     /**
@@ -149,10 +161,10 @@ public class RcaReport {
             sb.append("║ Validation Notes:                                                                  ║\n");
             appendWrapped(sb, validationNotes, BOX_TOTAL_WIDTH);
         }
-        if (validationChecklist != null && !validationChecklist.isEmpty()) {
+        if (validationTrace != null && !validationTrace.isEmpty()) {
             sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
-            sb.append("║ Validation Checklist:                                                              ║\n");
-            for (String item : validationChecklist) {
+            sb.append("║ Validation Trace:                                                              ║\n");
+            for (ValidationTraceItem item : validationTrace) {
                 appendWrapped(sb, "  • " + item, BOX_TOTAL_WIDTH);
             }
         }
@@ -220,4 +232,3 @@ public class RcaReport {
         }
     }
 }
-

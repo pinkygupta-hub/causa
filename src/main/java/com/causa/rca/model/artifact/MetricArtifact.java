@@ -53,6 +53,38 @@ public class MetricArtifact {
     public MetricArtifact() {
     }
 
+    // ── Formatted getters for Qute templates ──────────────────────────────────
+
+    /** Memory usage formatted as human-readable bytes (e.g. "536.87 MB"). */
+    public String getFormattedMemoryUsage() {
+        return String.format("%.2f bytes", memoryUsageBytes);
+    }
+
+    /** Memory limit formatted as human-readable bytes. */
+    public String getFormattedMemoryLimit() {
+        return String.format("%.2f bytes", memoryLimitBytes);
+    }
+
+    /** Memory usage percent formatted to 2 decimal places. */
+    public String getFormattedMemoryPercent() {
+        return String.format("%.2f", memoryUsagePercent);
+    }
+
+    /** CPU usage formatted to 3 decimal places. */
+    public String getFormattedCpuUsage() {
+        return String.format("%.3f", cpuUsageCores);
+    }
+
+    /** CPU limit formatted to 3 decimal places. */
+    public String getFormattedCpuLimit() {
+        return String.format("%.3f", cpuLimitCores);
+    }
+
+    /** CPU usage percent formatted to 2 decimal places. */
+    public String getFormattedCpuPercent() {
+        return String.format("%.2f", cpuUsagePercent);
+    }
+
     /**
      * Convenience factory that builds the LLM summary from the populated raw fields.
      */

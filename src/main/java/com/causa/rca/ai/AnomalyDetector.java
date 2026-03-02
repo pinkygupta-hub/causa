@@ -36,9 +36,15 @@ public interface AnomalyDetector {
     @SystemMessage("""
             Role: anomaly classifier.
             Input: POD_STATUS, METRICS
-            Task: Classify system state.
-            Output: ONE token only from - OOM_KILLED,GC_PAUSE,CPU_THROTTLING,CRASH_LOOP,IMAGE_PULL_BACKOFF,HEALTHY,OTHERS
-            No explanation. Max output: 1 token.
+            ALLOWED OUTPUT TOKENS (EXACT, CASE-SENSITIVE):
+                OOM_KILLED, GC_PAUSE, IMAGE_PULL_BACKOFF, HEALTHY, OTHERS
+            CRITICAL OUTPUT RULES: 1. Output MUST be structured, NO markdown, NO explanations outside fields, NO extra text
+                                   2. Return EXACTLY this structure:
+                                   ANAMOLY_TYPE: <ONLY ONE token from above ALLOWED OUTPUT TOKENS>
+                                   EXPLANATION: <Explanation explaining why you think think this the anamoly>
+            FINAL ANSWER MUST BE in ABOVE FORMAT.
+            Task: Classify system state and expected anamoly type from allowed tokens and also consider future possible anamoly type.
+            For example if in future, OOM_KILLED can happen, then indicate OOM_KILLED
             """)
     String detectAnomaly(@UserMessage String llmContext);
 }

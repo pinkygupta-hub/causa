@@ -59,6 +59,18 @@ public class StartupService {
     @ConfigProperty(name = "quarkus.mongodb.connection-string")
     String mongoConnectionString;
 
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
+    String detectorModel;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.rca.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
+    String rcaModel;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.validator.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
+    String validatorModel;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.embedding-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
+    String embeddingModel;
+
     /**
      * Handles application startup event.
      * <p>
@@ -114,7 +126,14 @@ public class StartupService {
         LOG.info("RCA Mode: " + rcaMode);
         LOG.info("RAG Enabled: " + ragEnabled);
         LOG.info("Cryostat Enabled: " + cryostatEnabled);
-        
+
+        // Log active AI model names so misconfiguration is immediately visible
+        LOG.info("=== AI Model Configuration ===");
+        LOG.info("Detector Model:  " + detectorModel);
+        LOG.info("RCA Model:       " + rcaModel);
+        LOG.info("Validator Model: " + validatorModel);
+        LOG.info("Embedding Model: " + embeddingModel);
+
         // Log MongoDB connection info (without credentials)
         String sanitizedConnection = mongoConnectionString.replaceAll("://[^@]+@", "://***:***@");
         LOG.info("MongoDB Connection: " + sanitizedConnection);
