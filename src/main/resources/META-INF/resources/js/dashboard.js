@@ -210,27 +210,60 @@ function populateDashboardTable(analyses) {
         // Extract anomaly info from report - use whatever is returned
         const anomalyType = analysis.report?.anomalyType || 'Unknown';
         const issueTitle = analysis.report?.title || analysis.report?.issue || 'Issue detected';
-        
-        row.innerHTML = `
-            <td class="timestamp-cell" data-order="${analysis.timestamp}">
-                <div class="timestamp">${formatTimestamp(analysis.timestamp)}</div>
-            </td>
-            <td class="namespace">${analysis.namespace}</td>
-            <td class="pod-cell">
-                <div class="pod-name">${analysis.podName}</div>
-            </td>
-            <td class="anomaly-type">
-                <span class="badge badge-warning">${anomalyType}</span>
-            </td>
-            <td class="issue-title">
-                <div class="issue-text">${issueTitle}</div>
-            </td>
-            <td class="actions-cell">
-                <a href="/dashboard/analysis/${analysis.sessionId}" class="btn btn-small btn-view">
-                    View Details
-                </a>
-            </td>
-        `;
+
+        // Timestamp cell
+        const tdTimestamp = document.createElement('td');
+        tdTimestamp.className = 'timestamp-cell';
+        tdTimestamp.setAttribute('data-order', analysis.timestamp);
+        const tsDiv = document.createElement('div');
+        tsDiv.className = 'timestamp';
+        tsDiv.textContent = formatTimestamp(analysis.timestamp);
+        tdTimestamp.appendChild(tsDiv);
+
+        // Namespace cell
+        const tdNamespace = document.createElement('td');
+        tdNamespace.className = 'namespace';
+        tdNamespace.textContent = analysis.namespace;
+
+        // Pod cell
+        const tdPod = document.createElement('td');
+        tdPod.className = 'pod-cell';
+        const podDiv = document.createElement('div');
+        podDiv.className = 'pod-name';
+        podDiv.textContent = analysis.podName;
+        tdPod.appendChild(podDiv);
+
+        // Anomaly type cell
+        const tdAnomaly = document.createElement('td');
+        tdAnomaly.className = 'anomaly-type';
+        const badge = document.createElement('span');
+        badge.className = 'badge badge-warning';
+        badge.textContent = anomalyType;
+        tdAnomaly.appendChild(badge);
+
+        // Issue title cell
+        const tdIssue = document.createElement('td');
+        tdIssue.className = 'issue-title';
+        const issueDiv = document.createElement('div');
+        issueDiv.className = 'issue-text';
+        issueDiv.textContent = issueTitle;
+        tdIssue.appendChild(issueDiv);
+
+        // Actions cell
+        const tdActions = document.createElement('td');
+        tdActions.className = 'actions-cell';
+        const link = document.createElement('a');
+        link.href = '/dashboard/analysis/' + encodeURIComponent(analysis.sessionId);
+        link.className = 'btn btn-small btn-view';
+        link.textContent = 'View Details';
+        tdActions.appendChild(link);
+
+        row.appendChild(tdTimestamp);
+        row.appendChild(tdNamespace);
+        row.appendChild(tdPod);
+        row.appendChild(tdAnomaly);
+        row.appendChild(tdIssue);
+        row.appendChild(tdActions);
         
         tbody.appendChild(row);
     });
@@ -300,17 +333,25 @@ function populateWorkloadsTable(workloads) {
     const tbody = document.getElementById('workloadsTableBody');
     
     if (!workloads || workloads.length === 0) {
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="3" class="text-center">
-                    <div class="empty-state">
-                        <div class="empty-icon">📦</div>
-                        <h3>No Workloads Found</h3>
-                        <p>No pods with RCA labels were found in the cluster.</p>
-                    </div>
-                </td>
-            </tr>
-        `;
+        const emptyRow = document.createElement('tr');
+        const emptyTd = document.createElement('td');
+        emptyTd.colSpan = 3;
+        emptyTd.className = 'text-center';
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        const emptyIcon = document.createElement('div');
+        emptyIcon.className = 'empty-icon';
+        emptyIcon.textContent = '📦';
+        const emptyTitle = document.createElement('h3');
+        emptyTitle.textContent = 'No Workloads Found';
+        const emptyMsg = document.createElement('p');
+        emptyMsg.textContent = 'No pods with RCA labels were found in the cluster.';
+        emptyState.appendChild(emptyIcon);
+        emptyState.appendChild(emptyTitle);
+        emptyState.appendChild(emptyMsg);
+        emptyTd.appendChild(emptyState);
+        emptyRow.appendChild(emptyTd);
+        tbody.appendChild(emptyRow);
         return;
     }
     
@@ -319,19 +360,32 @@ function populateWorkloadsTable(workloads) {
     workloads.forEach(workload => {
         const row = document.createElement('tr');
         row.className = 'analysis-row';
-        
-        row.innerHTML = `
-            <td class="namespace">${workload.namespace}</td>
-            <td class="pod-cell">
-                <div class="pod-name">${workload.podName}</div>
-            </td>
-            <td class="actions-cell">
-                <button onclick="analyzePod('${workload.namespace}', '${workload.podName}')"
-                        class="btn btn-small btn-analyze">
-                    Trigger Analysis
-                </button>
-            </td>
-        `;
+
+        // Namespace cell
+        const tdNamespace = document.createElement('td');
+        tdNamespace.className = 'namespace';
+        tdNamespace.textContent = workload.namespace;
+
+        // Pod cell
+        const tdPod = document.createElement('td');
+        tdPod.className = 'pod-cell';
+        const podDiv = document.createElement('div');
+        podDiv.className = 'pod-name';
+        podDiv.textContent = workload.podName;
+        tdPod.appendChild(podDiv);
+
+        // Actions cell
+        const tdActions = document.createElement('td');
+        tdActions.className = 'actions-cell';
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-small btn-analyze';
+        btn.textContent = 'Trigger Analysis';
+        btn.addEventListener('click', () => analyzePod(workload.namespace, workload.podName));
+        tdActions.appendChild(btn);
+
+        row.appendChild(tdNamespace);
+        row.appendChild(tdPod);
+        row.appendChild(tdActions);
         
         tbody.appendChild(row);
     });
@@ -365,16 +419,22 @@ function populateWorkloadsTable(workloads) {
  */
 function showWorkloadsError(message) {
     const tbody = document.getElementById('workloadsTableBody');
-    tbody.innerHTML = `
-        <tr>
-            <td colspan="3" class="text-center">
-                <div class="error-message">
-                    <span>⚠</span>
-                    <span>${message}</span>
-                </div>
-            </td>
-        </tr>
-    `;
+    tbody.innerHTML = '';
+    const row = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.className = 'text-center';
+    const errDiv = document.createElement('div');
+    errDiv.className = 'error-message';
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = '⚠';
+    const msgSpan = document.createElement('span');
+    msgSpan.textContent = message;
+    errDiv.appendChild(iconSpan);
+    errDiv.appendChild(msgSpan);
+    td.appendChild(errDiv);
+    row.appendChild(td);
+    tbody.appendChild(row);
 }
 
 /**
@@ -752,9 +812,21 @@ function showPodPicker(action) {
                 const statusIcon = podStatusIcon(session.status);
                 const btn = document.createElement('button');
                 btn.className = 'pod-picker-item';
-                btn.innerHTML =
-                    `<span>${statusIcon} <strong>${escapeHtml(session.podName || session.sessionId)}</strong></span>` +
-                    `<span class="pod-picker-ns">${escapeHtml(session.namespace || '')} · ${escapeHtml(session.status || '')}</span>`;
+
+                // Build button content using DOM API to avoid XSS
+                const nameSpan = document.createElement('span');
+                const strong = document.createElement('strong');
+                strong.textContent = session.podName || session.sessionId;
+                nameSpan.textContent = statusIcon + ' ';
+                nameSpan.appendChild(strong);
+
+                const nsSpan = document.createElement('span');
+                nsSpan.className = 'pod-picker-ns';
+                nsSpan.textContent = (session.namespace || '') + ' · ' + (session.status || '');
+
+                btn.appendChild(nameSpan);
+                btn.appendChild(nsSpan);
+
                 btn.addEventListener('click', () => {
                     // Highlight selection
                     list.querySelectorAll('.pod-picker-item').forEach(b => b.style.opacity = '0.5');
@@ -786,7 +858,11 @@ function showPodPicker(action) {
                 const msg = (err && err.message && err.message.includes('timed out'))
                     ? '⚠️ Request timed out while loading analysed pods. Please try again.'
                     : '⚠️ Could not load analyses. Please check your connection and try again.';
-                msgEl.innerHTML = `<div class="message-bubble">${msg}</div>`;
+                msgEl.innerHTML = '';
+                const errBubble = document.createElement('div');
+                errBubble.className = 'message-bubble';
+                errBubble.textContent = msg;
+                msgEl.appendChild(errBubble);
             }
         });
 }
@@ -1177,7 +1253,15 @@ function appendMessage(text, cssClass) {
 
     const bubble = document.createElement('div');
     bubble.className = 'message-bubble';
-    bubble.innerHTML = markdownToHtml(text);
+
+    // User messages are rendered as plain text to prevent XSS from keyboard input.
+    // Bot messages go through markdownToHtml which escapes HTML before applying
+    // safe structural transforms (bold, code, lists), so innerHTML is safe there.
+    if (cssClass === 'user-message') {
+        bubble.textContent = text;
+    } else {
+        bubble.innerHTML = markdownToHtml(text);
+    }
 
     wrapper.appendChild(bubble);
     container.appendChild(wrapper);
