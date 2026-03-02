@@ -7,6 +7,7 @@ import dev.langchain4j.service.tool.ToolExecutionResult;
 import io.quarkiverse.langchain4j.mcp.runtime.McpClientName;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.util.HashMap;
@@ -48,9 +49,12 @@ public class Langchain4jMcpService {
 
     /**
      * How long (ms) to wait before retrying MCP after a connectivity failure.
-     * Defaults to 60 seconds; can be overridden in tests.
+     * Defaults to 60 seconds; can be overridden via config or in tests.
+     *
+     * Config property: {@code mcp.circuit-open-duration-ms}
      */
-    static long CIRCUIT_OPEN_DURATION_MS = 60_000L;
+    @ConfigProperty(name = "mcp.circuit-open-duration-ms", defaultValue = "60000")
+    long circuitOpenDurationMs;
 
     /** Set to {@code true} while the circuit is open (MCP is considered unavailable). */
     private final AtomicBoolean circuitOpen = new AtomicBoolean(false);
@@ -80,7 +84,7 @@ public class Langchain4jMcpService {
      * <ul>
      *   <li>Returns {@code true} normally (circuit closed).</li>
      *   <li>After {@link #recordFailure()} is called the circuit opens and this
-     *       method returns {@code false} for {@link #CIRCUIT_OPEN_DURATION_MS} ms.</li>
+     *       method returns {@code false} for {@link #circuitOpenDurationMs} ms.</li>
      *   <li>After the cooldown expires the circuit closes again and the next call
      *       is allowed through as a probe.  If it succeeds, {@link #recordSuccess()}
      *       keeps the circuit closed; if it fails, {@link #recordFailure()} re-opens it.</li>
@@ -95,13 +99,13 @@ public class Langchain4jMcpService {
         }
         // Check whether the cooldown has expired
         long elapsed = System.currentTimeMillis() - circuitOpenedAt.get();
-        if (elapsed >= CIRCUIT_OPEN_DURATION_MS) {
+        if (elapsed >= circuitOpenDurationMs) {
             LOG.infof("MCP circuit-breaker cooldown expired (%d ms). Probing MCP server.", elapsed);
             circuitOpen.set(false);
             return true;
         }
         LOG.debugf("MCP circuit-breaker open — skipping MCP attempt (%d ms remaining in cooldown)",
-                   CIRCUIT_OPEN_DURATION_MS - elapsed);
+                   circuitOpenDurationMs - elapsed);
         return false;
     }
 
@@ -121,7 +125,7 @@ public class Langchain4jMcpService {
         circuitOpenedAt.set(System.currentTimeMillis());
         if (circuitOpen.compareAndSet(false, true)) {
             LOG.warnf("MCP circuit-breaker opened — MCP calls suppressed for %d s.",
-                      CIRCUIT_OPEN_DURATION_MS / 1000);
+                      circuitOpenDurationMs / 1000);
         }
     }
 

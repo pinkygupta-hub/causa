@@ -324,6 +324,9 @@ public class KubernetesMcpClient {
             if (pod == null) {
                 return "Pod not found";
             }
+            if (pod.getStatus() == null) {
+                return "Status not available";
+            }
 
             StringBuilder statusInfo = new StringBuilder();
             statusInfo.append("Phase: ").append(pod.getStatus().getPhase()).append("\n");
@@ -600,38 +603,55 @@ public class KubernetesMcpClient {
 
     private String formatPodStatusFromJson(JsonNode statusJson) {
         StringBuilder statusInfo = new StringBuilder();
-        
+
         if (statusJson.has("status")) {
             JsonNode status = statusJson.get("status");
-            if (status.has("phase")) {
-                statusInfo.append("Phase: ").append(status.get("phase").asText()).append("\n");
+            JsonNode phaseNode = status.path("phase");
+            if (!phaseNode.isMissingNode()) {
+                statusInfo.append("Phase: ")
+                          .append(phaseNode.asText("<unknown>"))
+                          .append("\n");
             }
 
             if (status.has("containerStatuses")) {
                 for (JsonNode cs : status.get("containerStatuses")) {
-                    statusInfo.append("Container: ").append(cs.get("name").asText()).append("\n");
-                    statusInfo.append("  Ready: ").append(cs.get("ready").asBoolean()).append("\n");
-                    statusInfo.append("  Restart Count: ").append(cs.get("restartCount").asInt()).append("\n");
+                    statusInfo.append("Container: ")
+                              .append(cs.path("name").asText("<unknown>"))
+                              .append("\n");
+                    statusInfo.append("  Ready: ")
+                              .append(cs.path("ready").asBoolean(false))
+                              .append("\n");
+                    statusInfo.append("  Restart Count: ")
+                              .append(cs.path("restartCount").asInt(0))
+                              .append("\n");
 
-                    if (cs.has("state") && cs.get("state").has("waiting")) {
-                        JsonNode waiting = cs.get("state").get("waiting");
+                    JsonNode state = cs.path("state");
+                    JsonNode waiting = state.path("waiting");
+                    if (!waiting.isMissingNode()) {
                         statusInfo.append("  Current State: Waiting (")
-                            .append(waiting.get("reason").asText()).append(")\n");
-                        if (waiting.has("message")) {
+                                  .append(waiting.path("reason").asText("<unknown>"))
+                                  .append(")\n");
+                        JsonNode messageNode = waiting.path("message");
+                        if (!messageNode.isMissingNode()) {
                             statusInfo.append("  Message: ")
-                                .append(waiting.get("message").asText()).append("\n");
+                                      .append(messageNode.asText())
+                                      .append("\n");
                         }
                     }
 
-                    if (cs.has("lastState") && cs.get("lastState").has("terminated")) {
-                        JsonNode terminated = cs.get("lastState").get("terminated");
+                    JsonNode terminated = cs.path("lastState").path("terminated");
+                    if (!terminated.isMissingNode()) {
                         statusInfo.append("  Last State: Terminated (")
-                            .append(terminated.get("reason").asText()).append(")\n");
+                                  .append(terminated.path("reason").asText("<unknown>"))
+                                  .append(")\n");
                         statusInfo.append("  Exit Code: ")
-                            .append(terminated.get("exitCode").asInt()).append("\n");
-                        if (terminated.has("finishedAt")) {
+                                  .append(terminated.path("exitCode").asInt(0))
+                                  .append("\n");
+                        JsonNode finishedAtNode = terminated.path("finishedAt");
+                        if (!finishedAtNode.isMissingNode()) {
                             statusInfo.append("  Finished At: ")
-                                .append(terminated.get("finishedAt").asText()).append("\n");
+                                      .append(finishedAtNode.asText())
+                                      .append("\n");
                         }
                     }
                 }
@@ -639,19 +659,5 @@ public class KubernetesMcpClient {
         }
         
         return statusInfo.toString();
-    }
-
-    /**
-     * Check if the MCP client bean is present.
-     *
-     * <p>Always returns {@code true} — the quarkus-langchain4j-mcp extension injects
-     * a non-null {@link dev.langchain4j.mcp.client.McpClient} bean unconditionally.
-     * Connectivity failures are handled per-call via the {@code try/catch} fallback
-     * to Fabric8 in each public method of this class.
-     *
-     * @return {@code true} always
-     */
-    public boolean isMcpEnabled() {
-        return mcpService.isReady();
     }
 }

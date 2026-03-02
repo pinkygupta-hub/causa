@@ -25,24 +25,24 @@ oc apply -f deployment/mcp-server/openshift-mcp-server-deployment.yaml
 
 The MCP server uses a **zero-build strategy** — no custom Docker image needed. It runs `npx kubernetes-mcp-server` on a standard `node:20-slim` image, fetching the latest version at startup.
 
-Causa connects to the MCP server at `${KUBERNETES_MCP_URL}/mcp` using the `quarkus-langchain4j-mcp` extension with Streamable HTTP transport. If the MCP server is unavailable, Causa automatically falls back to direct Fabric8 Kubernetes client access.
+Causa connects to the MCP server using the `quarkus-langchain4j-mcp` extension with Streamable HTTP transport. The value of `QUARKUS_LANGCHAIN4J_MCP__K8S__URL` is used verbatim as the full MCP endpoint URL (the `/mcp` path must be included in the value). If the MCP server is unavailable, Causa automatically falls back to direct Fabric8 Kubernetes client access.
 
 ## Configure Causa
 
 ```bash
 kubectl set env deployment/rca-agent \
   KUBERNETES_MCP_ENABLED=true \
-  KUBERNETES_MCP_URL=http://kubernetes-mcp-server.default.svc.cluster.local:3000/mcp
+  QUARKUS_LANGCHAIN4J_MCP__K8S__URL=http://kubernetes-mcp-server.default.svc.cluster.local:3000/mcp
 ```
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `KUBERNETES_MCP_ENABLED` | `false` | Enable MCP integration |
-| `KUBERNETES_MCP_URL` | `http://kubernetes-mcp-server.default.svc.cluster.local:3000` | MCP server base URL |
-| `KUBERNETES_MCP_CONNECT_TIMEOUT` | `3000` | Connection timeout (ms) |
-| `KUBERNETES_MCP_READ_TIMEOUT` | `10000` | Read timeout (ms) |
-| `KUBERNETES_MCP_AUTH_ENABLED` | `false` | Enable bearer token auth |
-| `KUBERNETES_MCP_AUTH_TOKEN` | `` | Bearer token |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__URL` | `http://kubernetes-mcp-server:3000/mcp` | Full MCP endpoint URL (must include `/mcp` path) |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__TOOL_EXECUTION_TIMEOUT` | `60s` | Tool execution timeout |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__LOG_REQUESTS` | `false` | Log raw MCP request wire traffic |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__LOG_RESPONSES` | `false` | Log raw MCP response wire traffic |
+| `MCP_CIRCUIT_OPEN_DURATION_MS` | `60000` | Circuit-breaker cooldown (ms) — how long MCP calls are suppressed after a connectivity failure before a probe is attempted |
 
 ## Verify
 
