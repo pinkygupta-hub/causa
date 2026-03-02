@@ -60,13 +60,13 @@ public class RcaOrchestrator {
     @Inject
     AnalysisTrackingService trackingService;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "phi3:mini")
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
     String detectorModel;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.rca.chat-model.model-id", defaultValue = "phi3:mini")
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.rca.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
     String rcaModel;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.validator.chat-model.model-id", defaultValue = "phi3:mini")
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.validator.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
     String validatorModel;
 
     @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",

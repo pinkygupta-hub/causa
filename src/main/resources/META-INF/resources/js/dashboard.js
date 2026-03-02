@@ -20,9 +20,6 @@ $(document).ready(function() {
     if ($('#analysesTable').length) {
         initAnalysesTable();
     }
-    
-    // Setup auto-refresh for in-progress analyses
-    setupAutoRefresh();
 });
 
 /**
@@ -499,24 +496,6 @@ function analyzePod(namespace, podName) {
         button.textContent = '';
         originalChildren.forEach(n => button.appendChild(n));
     });
-}
-
-/**
- * Auto-refresh for in-progress analyses
- */
-function setupAutoRefresh() {
-    // Check if there are any in-progress analyses
-    const inProgressElements = document.querySelectorAll('.status-in-progress');
-    
-    if (inProgressElements.length > 0) {
-        console.log(`Found ${inProgressElements.length} in-progress analyses. Setting up auto-refresh...`);
-        
-        // Refresh every 10 seconds if there are in-progress analyses
-        setTimeout(() => {
-            console.log('Auto-refreshing dashboard...');
-            window.location.reload();
-        }, 10000);
-    }
 }
 
 /**
