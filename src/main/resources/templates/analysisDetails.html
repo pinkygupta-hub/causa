@@ -41,6 +41,7 @@
         <section class="analysis-header-section">
             <h1 class="page-title">
                 <span>Analysis Details</span>
+                <button class="btn-copy-icon" onclick="debugWithBob()" title="Copy to clipboard">📋</button>
             </h1>
 
             {#if session.isInProgress()}
@@ -71,10 +72,18 @@
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 1. POD INFORMATION                                              -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- Hidden data for Pod Information clipboard copy -->
+        <div id="pod-namespace-text" style="display:none;">{session.namespace}</div>
+        <div id="pod-name-text" style="display:none;">{session.podName}</div>
+        {#if session.collectedArtifacts && session.collectedArtifacts.podInfo}
+        <div id="pod-phase-text" style="display:none;">{session.collectedArtifacts.podInfo.phase}</div>
+        {/if}
+
         <section class="details-section">
             <div class="section-header">
                 <h2 class="section-title">
                     <span>Pod Information</span>
+                    <button class="btn-copy-icon" onclick="copySection('pod-info-section')" title="Copy Pod Information">📋</button>
                 </h2>
             </div>
             <div class="info-grid">
@@ -121,13 +130,19 @@
             <div class="section-header">
                 <h2 class="section-title">
                     <span>Issue Detected</span>
+                    <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Issue Detected">📋</button>
                 </h2>
             </div>
             <div class="content-box">
-                <h3 class="issue-title">{session.report.title}</h3>
-                <div class="issue-description">{session.report.issue}</div>
+                <h3 class="issue-title" id="issue-title-text">{session.report.title}</h3>
+                <div class="issue-description" id="issue-description-text">{session.report.issue}</div>
             </div>
         </section>
+
+        <!-- Hidden data for clipboard copy -->
+        <div id="evidence-text" style="display:none;">{session.report.evidence}</div>
+        <div id="supported-logs-text" style="display:none;">{#for log in session.report.supportedLogs}{log}
+{/for}</div>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 3. EVIDENCE                                                      -->
@@ -136,6 +151,7 @@
             <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
                 <h2 class="section-title">
                     <span>Evidence</span>
+                    <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('evidence-section')" title="Copy Evidence">📋</button>
                 </h2>
                 <span class="expand-icon" x-text="evidenceExpanded ? '▲' : '▼'">▲</span>
             </div>
@@ -148,12 +164,19 @@
         <!-- 4. SUPPORTED LOGS                                               -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
-        <section class="details-section">
+        <section class="details-section" id="supported-logs-section">
             <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
                 <h2 class="section-title">
                     <span>Supported Logs</span>
+                    <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('supported-logs-section')" title="Copy Supported Logs">📋</button>
                 </h2>
-                <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▲</span>
+                <div class="section-header-actions">
+                    <a href="#context-logs-section" class="btn btn-view-logs btn-small"
+                       onclick="viewLogsSection(this)">
+                        📋 View Logs
+                    </a>
+                    <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▲</span>
+                </div>
             </div>
             <div class="content-box logs-box" x-show="logsExpanded" x-collapse>
                 <div class="logs-content">
@@ -169,9 +192,9 @@
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 5. VALIDATION SUMMARY (Notes + Checklist)                       -->
+        <!-- 5. VALIDATION SUMMARY                                           -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        {#if session.report.validationNotes || (session.report.validationChecklist && !session.report.validationChecklist.isEmpty())}
+        {#if session.report.validationSummary || (session.report.validationTrace && !session.report.validationTrace.isEmpty()) || (session.report.missingData && !session.report.missingData.isEmpty()) || (session.report.riskFactors && !session.report.riskFactors.isEmpty())}
         <section class="details-section">
             <div class="section-header expandable" @click="checklistExpanded = !checklistExpanded">
                 <h2 class="section-title">
@@ -180,24 +203,74 @@
                 <span class="expand-icon" x-text="checklistExpanded ? '▲' : '▼'">▲</span>
             </div>
             <div x-show="checklistExpanded" x-collapse>
-                {#if session.report.validationNotes}
+
+                <!-- Overall Assessment -->
+                {#if session.report.validationSummary}
                 <div class="content-box validation-notes-box">
-                    <div class="validation-notes-label">Notes</div>
-                    <div class="evidence-content">{session.report.validationNotes}</div>
+                    <div class="validation-notes-label">Overall Assessment</div>
+                    <div class="evidence-content">{session.report.validationSummary}</div>
                 </div>
                 {/if}
-                {#if session.report.validationChecklist && !session.report.validationChecklist.isEmpty()}
+
+                <!-- Validation Trace -->
+                {#if session.report.validationTrace && !session.report.validationTrace.isEmpty()}
                 <div class="content-box logs-box" style="margin-top: 8px;">
-                    <div class="validation-notes-label">Checklist</div>
+                    <div class="validation-notes-label">Validation Trace</div>
                     <div class="logs-content">
-                        {#for item in session.report.validationChecklist}
-                        <div class="log-entry checklist-entry">
+                        {#for item in session.report.validationTrace}
+                        <div class="log-entry checklist-entry" style="flex-direction: column; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                <span class="log-bullet">•</span>
+                                <span class="log-text" style="font-weight: 600;">{item.claim}</span>
+                                <span class="status-badge {item.decision == 'Supported' ? 'status-completed' : (item.decision == 'Weakly Supported' ? 'status-detecting' : 'status-failed')}" style="font-size: 0.7rem; padding: 2px 6px;">{item.decision}</span>
+                                {#if item.confidence}
+                                <span class="truncation-badge">{item.formattedConfidence}</span>
+                                {/if}
+                            </div>
+                            {#if item.notes}
+                            <div style="margin-left: 20px; margin-top: 4px; color: var(--text-secondary); font-size: 0.85rem;">{item.notes}</div>
+                            {/if}
+                            {#if item.evidenceFound && !item.evidenceFound.isEmpty()}
+                            <div style="margin-left: 20px; margin-top: 4px; font-size: 0.8rem; color: var(--text-muted);">
+                                Evidence: {#for e in item.evidenceFound}<span style="display: block; font-family: monospace;">{e}</span>{/for}
+                            </div>
+                            {/if}
+                        </div>
+                        {/for}
+                    </div>
+                </div>
+                {/if}
+
+                <!-- Missing Data -->
+                {#if session.report.missingData && !session.report.missingData.isEmpty()}
+                <div class="content-box logs-box" style="margin-top: 8px;">
+                    <div class="validation-notes-label" style="color: var(--warning-color);">⚠ Missing Data</div>
+                    <div class="logs-content">
+                        {#for item in session.report.missingData}
+                        <div class="log-entry">
+                            <span class="log-bullet">•</span>
                             <span class="log-text">{item}</span>
                         </div>
                         {/for}
                     </div>
                 </div>
                 {/if}
+
+                <!-- Risk Factors -->
+                {#if session.report.riskFactors && !session.report.riskFactors.isEmpty()}
+                <div class="content-box logs-box" style="margin-top: 8px;">
+                    <div class="validation-notes-label" style="color: var(--error-color);">⚡ Risk Factors</div>
+                    <div class="logs-content">
+                        {#for item in session.report.riskFactors}
+                        <div class="log-entry">
+                            <span class="log-bullet">•</span>
+                            <span class="log-text">{item}</span>
+                        </div>
+                        {/for}
+                    </div>
+                </div>
+                {/if}
+
             </div>
         </section>
         {/if}
@@ -304,27 +377,27 @@
                         <div class="artifact-grid">
                             <div class="artifact-metric">
                                 <span class="metric-label">Memory Usage</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.memoryUsageBytes:%.2f} bytes</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryUsage}</span>
                             </div>
                             <div class="artifact-metric">
                                 <span class="metric-label">Memory Limit</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.memoryLimitBytes:%.2f} bytes</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryLimit}</span>
                             </div>
                             <div class="artifact-metric">
                                 <span class="metric-label">Memory %</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.memoryUsagePercent:%.2f}%</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryPercent}%</span>
                             </div>
                             <div class="artifact-metric">
                                 <span class="metric-label">CPU Usage</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.cpuUsageCores:%.2f} cores</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuUsage} cores</span>
                             </div>
                             <div class="artifact-metric">
                                 <span class="metric-label">CPU Limit</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.cpuLimitCores:%.2f} cores</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuLimit} cores</span>
                             </div>
                             <div class="artifact-metric">
                                 <span class="metric-label">CPU %</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.cpuUsagePercent:%.2f}%</span>
+                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuPercent}%</span>
                             </div>
                         </div>
                         <div class="artifact-summary-box">
@@ -368,7 +441,7 @@
 
                 <!-- 8c. Logs -->
                 {#if session.collectedArtifacts.logs}
-                <div class="artifact-subsection">
+                <div class="artifact-subsection" id="context-logs-section">
                     <div class="artifact-header">
                         <span class="artifact-title">📋 Logs</span>
                         {#if session.collectedArtifacts.logs.summary}
@@ -477,6 +550,153 @@
         </section>
     </div>
 
-    <script src="/js/dashboard.js"></script>
+    <!-- Toast notification for clipboard copy -->
+    <div id="bob-toast" style="
+        display: none;
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        background: #161616;
+        color: #ffffff;
+        padding: 0.75rem 1.25rem;
+        border-radius: 6px;
+        font-size: 0.875rem;
+        font-family: 'IBM Plex Sans', sans-serif;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 9999;
+        animation: fadeInUp 0.2s ease;
+    ">✅ Copied to clipboard!</div>
+
+    <script>
+        // Auto-refresh this page (not dashboard) when analysis is in progress
+        (function() {
+            const currentUrl = window.location.href;
+            // Only auto-refresh if we're on an analysis details page
+            if (currentUrl.includes('/dashboard/analysis/')) {
+                const statusBadge = document.querySelector('.status-badge');
+                const inProgressStatuses = ['INITIATED', 'COLLECTING_DATA', 'DETECTING_ANOMALY', 'ANALYZING_RCA', 'VALIDATING'];
+                const isInProgress = statusBadge && inProgressStatuses.some(s => statusBadge.textContent.toUpperCase().includes(s.replace('_', ' ')));
+                if (isInProgress) {
+                    setTimeout(function() {
+                        window.location.href = currentUrl;
+                    }, 5000);
+                }
+            }
+        })();
+
+        function viewLogsSection(link) {
+            // Expand the Context Details section if collapsed, then navigate to anchor
+            var contextSection = document.querySelector('.context-details-section');
+            if (contextSection) {
+                var alpineEl = contextSection.closest('[x-data]') || contextSection;
+                if (alpineEl._x_dataStack && alpineEl._x_dataStack[0]) {
+                    alpineEl._x_dataStack[0].contextExpanded = true;
+                }
+            }
+            setTimeout(function() {
+                window.location.hash = 'context-logs-section';
+            }, 350);
+        }
+
+        function showBobToast() {
+            var toast = document.getElementById('bob-toast');
+            toast.style.display = 'block';
+            setTimeout(function() { toast.style.display = 'none'; }, 2500);
+        }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(showBobToast).catch(function() {
+                    copyFallback(text);
+                });
+            } else {
+                copyFallback(text);
+            }
+        }
+
+        function copyFallback(text) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand('copy'); } catch(e) {}
+            document.body.removeChild(ta);
+            showBobToast();
+        }
+
+        function getText(id) {
+            var el = document.getElementById(id);
+            return el ? el.innerText.trim() : '';
+        }
+
+        // Copy a specific section by section key
+        function copySection(sectionKey) {
+            var parts = [];
+            if (sectionKey === 'pod-info-section') {
+                var ns = getText('pod-namespace-text');
+                var pod = getText('pod-name-text');
+                var phase = getText('pod-phase-text');
+                parts.push('## Pod Information');
+                if (ns) parts.push('Namespace: ' + ns);
+                if (pod) parts.push('Pod Name: ' + pod);
+                if (phase) parts.push('Phase: ' + phase);
+            } else if (sectionKey === 'issue-detected-section') {
+                var title = getText('issue-title-text');
+                var desc = getText('issue-description-text');
+                parts.push('## Issue Detected');
+                if (title) parts.push('**' + title + '**');
+                if (desc) parts.push(desc);
+            } else if (sectionKey === 'evidence-section') {
+                var ev = getText('evidence-text');
+                parts.push('## Evidence');
+                if (ev) parts.push(ev);
+            } else if (sectionKey === 'supported-logs-section') {
+                var logs = getText('supported-logs-text');
+                parts.push('## Supported Logs');
+                if (logs) parts.push(logs);
+            }
+            copyToClipboard(parts.join('\n'));
+        }
+
+        // Copy all: Pod Info + Issue Detected + Supported Logs + Evidence
+        function debugWithBob() {
+            var parts = [];
+
+            var ns = getText('pod-namespace-text');
+            var pod = getText('pod-name-text');
+            var phase = getText('pod-phase-text');
+            if (ns || pod) {
+                parts.push('## Pod Information');
+                if (ns) parts.push('Namespace: ' + ns);
+                if (pod) parts.push('Pod Name: ' + pod);
+                if (phase) parts.push('Phase: ' + phase);
+            }
+
+            var issueTitle = getText('issue-title-text');
+            var issueDesc = getText('issue-description-text');
+            if (issueTitle || issueDesc) {
+                parts.push('\n## Issue Detected');
+                if (issueTitle) parts.push('**' + issueTitle + '**');
+                if (issueDesc) parts.push(issueDesc);
+            }
+
+            var supportedLogs = getText('supported-logs-text');
+            if (supportedLogs) {
+                parts.push('\n## Supported Logs');
+                parts.push(supportedLogs);
+            }
+
+            var evidence = getText('evidence-text');
+            if (evidence) {
+                parts.push('\n## Evidence');
+                parts.push(evidence);
+            }
+
+            copyToClipboard(parts.join('\n'));
+        }
+    </script>
 </body>
 </html>

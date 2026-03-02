@@ -23,34 +23,52 @@ $(document).ready(function() {
 });
 
 /**
+ * Activate a specific tab by name, updating URL hash and loading data.
+ */
+function activateTab(targetTab) {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active'));
+
+    const button = document.querySelector(`.tab-button[data-tab="${targetTab}"]`);
+    const content = document.getElementById(`${targetTab}-tab`);
+
+    if (button) button.classList.add('active');
+    if (content) content.classList.add('active');
+
+    // Persist active tab in URL hash so Refresh stays on the same tab
+    window.location.hash = targetTab;
+
+    if (targetTab === 'dashboard') {
+        loadDashboard();
+    } else if (targetTab === 'workloads') {
+        loadWorkloads();
+    }
+
+    console.log(`Switched to ${targetTab} tab`);
+}
+
+/**
  * Initialize tab switching functionality
  */
 function initTabSwitching() {
     const tabButtons = document.querySelectorAll('.tab-button');
-    const tabContents = document.querySelectorAll('.tab-content');
-    
+
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             const targetTab = button.getAttribute('data-tab');
-            
-            // Remove active class from all buttons and contents
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabContents.forEach(content => content.classList.remove('active'));
-            
-            // Add active class to clicked button and corresponding content
-            button.classList.add('active');
-            document.getElementById(`${targetTab}-tab`).classList.add('active');
-            
-            // Load data for specific tabs
-            if (targetTab === 'dashboard') {
-                loadDashboard();
-            } else if (targetTab === 'workloads') {
-                loadWorkloads();
-            }
-            
-            console.log(`Switched to ${targetTab} tab`);
+            activateTab(targetTab);
         });
     });
+
+    // Restore active tab from URL hash on page load (survives Refresh)
+    const hash = window.location.hash.replace('#', '');
+    const validTabs = ['dashboard', 'analysis', 'workloads', 'about'];
+    if (hash && validTabs.includes(hash)) {
+        activateTab(hash);
+    }
 }
 
 /**
@@ -213,8 +231,6 @@ function populateDashboardTable(analyses) {
         const row = document.createElement('tr');
         row.className = 'analysis-row';
         
-        // Extract anomaly info from report - use whatever is returned
-        const anomalyType = analysis.report?.anomalyType || 'Unknown';
         const issueTitle = analysis.report?.title || analysis.report?.issue || 'Issue detected';
 
         // Timestamp cell

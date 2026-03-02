@@ -360,6 +360,86 @@ body {
     background: var(--color-primary-hover);
 }
 
+/* Inline copy icon button */
+.btn-copy-icon {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    opacity: 0.5;
+    transition: var(--transition-fast);
+    vertical-align: middle;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-copy-icon:hover {
+    opacity: 1;
+    background: var(--color-bg-tertiary);
+}
+
+/* Debug with Bob button */
+.btn-debug-bob {
+    background: #161616;
+    color: #ffffff;
+    border: 1px solid #393939;
+    font-size: 0.8125rem;
+    padding: 0.375rem var(--spacing-md);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+}
+
+.btn-debug-bob:hover {
+    background: #393939;
+    border-color: #525252;
+}
+
+/* View Logs link button */
+.btn-view-logs {
+    background: transparent;
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+}
+
+.btn-view-logs:hover {
+    background: var(--color-primary);
+    color: #ffffff;
+}
+
+/* Section header actions group */
+.section-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+/* Toast animation */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Statistics Section */
 .stats-section {
     margin-bottom: var(--spacing-xl);

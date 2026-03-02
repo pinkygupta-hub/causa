@@ -154,8 +154,10 @@ public class RcaOrchestrator {
                 throw new RuntimeException(errorMsg, e);
             }
 
-            // Sanitize: take first line, strip comments
-            String anomalyType = rawAnomaly.split("\n")[0].split("#")[0].trim();
+            // Parse anomaly type token from raw response.
+            // Handles both clean single-token responses ("OOM_KILLED") and
+            // verbose responses like "ANAMOLY_TYPE: OTHERS" or "ANOMALY_TYPE: HEALTHY"
+            String anomalyType = parseAnomalyType(rawAnomaly);
             LOG.info("Sanitized Anomaly Type: [" + anomalyType + "]");
             trackingService.recordStageEnd(sessionId, "anomaly_detection");
 
@@ -220,6 +222,63 @@ public class RcaOrchestrator {
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Parses the anomaly type token from the raw LLM response.
+     * <p>
+     * Handles both clean single-token responses (e.g. {@code "OOM_KILLED"}) and
+     * verbose responses where the model prefixes the token with a label, e.g.:
+     * <ul>
+     *   <li>{@code "ANAMOLY_TYPE: OTHERS"}</li>
+     *   <li>{@code "ANOMALY_TYPE: HEALTHY"}</li>
+     *   <li>{@code "ANOMALY: CPU_THROTTLING"}</li>
+     * </ul>
+     * The valid token set is: OOM_KILLED, GC_PAUSE, CPU_THROTTLING, CRASH_LOOP,
+     * IMAGE_PULL_BACKOFF, HEALTHY, OTHERS.
+     *
+     * @param raw the raw string returned by the anomaly detector LLM
+     * @return the extracted anomaly type token in uppercase, or {@code "OTHERS"} if unparseable
+     */
+    private String parseAnomalyType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "OTHERS";
+        }
+
+        // Valid tokens (including common misspelling "ANAMOLY")
+        java.util.Set<String> validTokens = java.util.Set.of(
+                "OOM_KILLED", "GC_PAUSE", "CPU_THROTTLING", "CRASH_LOOP",
+                "IMAGE_PULL_BACKOFF", "HEALTHY", "OTHERS");
+
+        // 1. Check if the response contains "KEY: VALUE" pattern (e.g. "ANAMOLY_TYPE: OTHERS")
+        //    Search all lines for a colon-separated value that matches a valid token
+        for (String line : raw.split("\n")) {
+            if (line.contains(":")) {
+                String value = line.substring(line.indexOf(':') + 1).split("#")[0].trim().toUpperCase();
+                if (validTokens.contains(value)) {
+                    return value;
+                }
+            }
+        }
+
+        // 2. Scan each line for a standalone valid token
+        for (String line : raw.split("\n")) {
+            String candidate = line.split("#")[0].trim().toUpperCase();
+            if (validTokens.contains(candidate)) {
+                return candidate;
+            }
+        }
+
+        // 3. Scan word-by-word across the entire response
+        for (String word : raw.toUpperCase().split("[\\s,.:;\\[\\]()]+")) {
+            if (validTokens.contains(word)) {
+                return word;
+            }
+        }
+
+        // 4. Fallback: return first non-empty line token, uppercased
+        String firstLine = raw.split("\n")[0].split("#")[0].trim().toUpperCase();
+        return firstLine.isEmpty() ? "OTHERS" : firstLine;
+    }
 
     private String buildModelErrorMessage(String stage, String model, Exception cause) {
         return String.format(
