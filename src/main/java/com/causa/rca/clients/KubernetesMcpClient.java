@@ -302,18 +302,48 @@ public class KubernetesMcpClient {
     private List<Event> getEventsViaFabric8(String namespace, String podName) {
         LOG.debug("Using Fabric8 to fetch events: " + namespace + "/" + podName);
         try {
+            String podPrefix = derivePodPrefix(podName);
             return kubernetesClient.v1().events()
                 .inNamespace(namespace)
                 .list()
                 .getItems()
                 .stream()
-                .filter(e -> e.getInvolvedObject() != null && 
-                            podName.equals(e.getInvolvedObject().getName()))
+                .filter(e -> e.getInvolvedObject() != null
+                        && matchesPod(e.getInvolvedObject().getName(), podName, podPrefix))
                 .collect(Collectors.toList());
         } catch (Exception e) {
             LOG.error("Failed to fetch events via Fabric8", e);
             return List.of();
         }
+    }
+
+    /**
+     * Derives the deployment/ReplicaSet name prefix from a pod name.
+     * <p>
+     * Kubernetes pod names follow the pattern: {@code <deployment>-<rs-hash>-<pod-hash>}
+     * where both hashes are 5-character alphanumeric suffixes.
+     * This method strips the last two dash-separated segments to get the deployment prefix,
+     * which is used to match events emitted against the ReplicaSet or Deployment.
+     * </p>
+     * <p>
+     * Example: {@code my-app-7d9f8b6c4-xk2pq} → {@code my-app}
+     * </p>
+     *
+     * @param podName the full pod name
+     * @return the deployment prefix, or empty string if the name has fewer than 3 segments
+     */
+    private String derivePodPrefix(String podName) {
+        if (podName == null || podName.isEmpty()) return "";
+        String[] parts = podName.split("-");
+        // Need at least 3 parts: <name>-<rs-hash>-<pod-hash>
+        if (parts.length < 3) return "";
+        // Rejoin all parts except the last two
+        StringBuilder prefix = new StringBuilder();
+        for (int i = 0; i < parts.length - 2; i++) {
+            if (i > 0) prefix.append('-');
+            prefix.append(parts[i]);
+        }
+        return prefix.toString();
     }
 
     private String getStatusViaFabric8(String namespace, String podName) {
@@ -500,9 +530,16 @@ public class KubernetesMcpClient {
     /**
      * Parse events from the custom text format returned by the MCP events_list tool.
      * The format is a YAML list with fields: InvolvedObject.Name, Message, Reason, Timestamp, Type.
-     * Filters to only return events for the specified pod name.
+     *
+     * <p>Applies the same three-tier matching used by the Fabric8 fallback:
+     * <ol>
+     *   <li>Exact match — event is for the pod itself</li>
+     *   <li>Pod name starts with object name — object is the owning ReplicaSet</li>
+     *   <li>Object name starts with pod prefix — sibling pod / Deployment event</li>
+     * </ol>
      *
      * Example entry:
+     * <pre>
      * - InvolvedObject:
      *     Kind: Pod
      *     Name: my-pod
@@ -510,12 +547,15 @@ public class KubernetesMcpClient {
      *   Reason: Pulled
      *   Timestamp: 2026-02-27 13:30:54 +0000 UTC
      *   Type: Normal
+     * </pre>
      */
     private List<Event> parseEventsFromMcpText(String eventsText, String podName) {
         List<Event> result = new ArrayList<>();
         if (eventsText == null || eventsText.isBlank()) {
             return result;
         }
+
+        String podPrefix = derivePodPrefix(podName);
 
         // Split on list item boundaries (lines starting with "- ")
         // Each block starts with "- InvolvedObject:" or similar
@@ -533,9 +573,9 @@ public class KubernetesMcpClient {
             
             // New list item
             if (trimmed.startsWith("- InvolvedObject:")) {
-                // Save previous entry if it matches
-                if (podName.equals(currentName)) {
-                    result.add(buildEvent(podName, currentMessage, currentReason, currentType, currentTimestamp));
+                // Save previous entry if it matches (same three-tier logic as Fabric8 fallback)
+                if (matchesPod(currentName, podName, podPrefix)) {
+                    result.add(buildEvent(currentName, currentMessage, currentReason, currentType, currentTimestamp));
                 }
                 currentName = null;
                 currentMessage = null;
@@ -578,11 +618,28 @@ public class KubernetesMcpClient {
         }
         
         // Add the last entry
-        if (podName.equals(currentName)) {
-            result.add(buildEvent(podName, currentMessage, currentReason, currentType, currentTimestamp));
+        if (matchesPod(currentName, podName, podPrefix)) {
+            result.add(buildEvent(currentName, currentMessage, currentReason, currentType, currentTimestamp));
         }
         
         return result;
+    }
+
+    /**
+     * Returns {@code true} if {@code objName} should be included when collecting events for {@code podName}.
+     * Applies the same three-tier matching used by the Fabric8 fallback:
+     * <ol>
+     *   <li>Exact match — event is for the pod itself</li>
+     *   <li>{@code podName} starts with {@code objName + "-"} — object is the owning ReplicaSet</li>
+     *   <li>{@code objName} starts with {@code podPrefix} — sibling pod or Deployment event</li>
+     * </ol>
+     */
+    private boolean matchesPod(String objName, String podName, String podPrefix) {
+        if (objName == null) return false;
+        if (podName.equals(objName)) return true;
+        if (podName.startsWith(objName + "-")) return true;
+        if (!podPrefix.isEmpty() && objName.startsWith(podPrefix)) return true;
+        return false;
     }
 
     private Event buildEvent(String podName, String message, String reason, String type, String timestamp) {

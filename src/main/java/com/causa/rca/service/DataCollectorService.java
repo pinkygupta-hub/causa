@@ -15,7 +15,6 @@ import com.causa.rca.utils.TokenBudgetEnforcer;
 import com.causa.rca.utils.TokenProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 
-import io.fabric8.kubernetes.client.KubernetesClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -28,8 +27,6 @@ import io.fabric8.kubernetes.api.model.Event;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-
 /**
  * Service responsible for collecting diagnostic data from various sources and packaging
  * it into a structured {@link CollectedArtifacts} object.
@@ -37,8 +34,8 @@ import java.util.stream.Collectors;
  * <h3>Data sources</h3>
  * <ul>
  *   <li>Prometheus – CPU and memory metrics</li>
- *   <li>Kubernetes API – pod status, container states, events</li>
- *   <li>Kubernetes logs – current and previous container logs</li>
+ *   <li>Kubernetes – pod status, container states, events, logs
+ *       (via {@link KubernetesMcpClient}: MCP-first, Fabric8 fallback)</li>
  *   <li>Cryostat – optional JFR analysis (only when {@code cryostat.enabled=true})</li>
  * </ul>
  *
@@ -58,9 +55,6 @@ import java.util.stream.Collectors;
 public class DataCollectorService {
 
     private static final Logger LOG = Logger.getLogger(DataCollectorService.class);
-
-    @Inject
-    KubernetesClient kubernetesClient;
 
     @Inject
     KubernetesMcpClient kubernetesMcpClient;
@@ -164,7 +158,7 @@ public class DataCollectorService {
         artifact.podName   = podName;
 
         try {
-            Pod pod = kubernetesClient.pods().inNamespace(namespace).withName(podName).get();
+            Pod pod = kubernetesMcpClient.getPod(namespace, podName);
             if (pod == null) {
                 artifact.phase = "NotFound";
                 artifact.rawStatusText = "Pod not found";
@@ -247,31 +241,11 @@ public class DataCollectorService {
     public EventArtifact fetchEventArtifact(String namespace, String podName) {
         LOG.info("Fetching K8s events for pod: " + podName);
         try {
-            // Derive the pod name prefix for matching ReplicaSet/Deployment-owned pods.
-            // Pod names follow the pattern: <deployment>-<rs-hash>-<pod-hash>
-            // We match events whose involvedObject.name equals the pod name OR starts with
-            // the pod name (covers events emitted against the pod itself) OR whose
-            // involvedObject.name is a prefix of the pod name (covers ReplicaSet events).
-            String podPrefix = derivePodPrefix(podName);
+            // KubernetesMcpClient.getPodEvents uses MCP (events_list) when configured,
+            // falling back to Fabric8 with pod-prefix filtering when MCP is unavailable.
+            List<Event> k8sEvents = kubernetesMcpClient.getPodEvents(namespace, podName);
 
-            List<Event> k8sEvents = kubernetesClient.v1().events()
-                    .inNamespace(namespace).list().getItems().stream()
-                    .filter(e -> {
-                        if (e.getInvolvedObject() == null) return false;
-                        String objName = e.getInvolvedObject().getName();
-                        if (objName == null) return false;
-                        // Exact match (pod itself)
-                        if (podName.equals(objName)) return true;
-                        // Pod name starts with the object name (e.g. ReplicaSet is prefix of pod)
-                        if (podName.startsWith(objName + "-")) return true;
-                        // Object name starts with pod prefix (e.g. another pod in same RS)
-                        if (!podPrefix.isEmpty() && objName.startsWith(podPrefix)) return true;
-                        return false;
-                    })
-                    .collect(Collectors.toList());
-
-            LOG.info("Gathered " + k8sEvents.size() + " raw events for " + podName
-                    + " (prefix=" + podPrefix + ")");
+            LOG.info("Gathered " + k8sEvents.size() + " raw events for " + podName);
 
             // Map to RawEvent value objects
             List<RawEvent> rawEvents = new ArrayList<>();
@@ -318,8 +292,8 @@ public class DataCollectorService {
     public MetricArtifact fetchMetricArtifact(String namespace, String podName) {
         LOG.info("Fetching metrics for: " + namespace + "/" + podName);
         try {
-            // 1. K8s resource config
-            Pod pod = kubernetesClient.pods().inNamespace(namespace).withName(podName).get();
+            // 1. K8s resource config (via MCP with Fabric8 fallback)
+            Pod pod = kubernetesMcpClient.getPod(namespace, podName);
             String k8sLimits   = "N/A";
             String k8sRequests = "N/A";
             if (pod != null && pod.getSpec() != null && !pod.getSpec().getContainers().isEmpty()) {
@@ -399,15 +373,13 @@ public class DataCollectorService {
     public String fetchRawLogs(String namespace, String podName) {
         LOG.info("Fetching logs for pod: " + podName);
         try {
-            String logs = kubernetesClient.pods()
-                    .inNamespace(namespace).withName(podName)
-                    .tailingLines(500).getLog();
+            // KubernetesMcpClient.getPodLogs uses MCP (pods_log) when configured,
+            // falling back to Fabric8 when MCP is unavailable.
+            String logs = kubernetesMcpClient.getPodLogs(namespace, podName, 500, false);
 
             if (logs == null || logs.trim().isEmpty()) {
                 LOG.info("Current logs empty, attempting previous container logs for: " + podName);
-                logs = kubernetesClient.pods()
-                        .inNamespace(namespace).withName(podName)
-                        .terminated().tailingLines(500).getLog();
+                logs = kubernetesMcpClient.getPodLogs(namespace, podName, 500, true);
             }
 
             LOG.info("Gathered logs (length: " + (logs != null ? logs.length() : 0) + ")");
@@ -445,35 +417,6 @@ public class DataCollectorService {
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Derives the deployment/ReplicaSet name prefix from a pod name.
-     * <p>
-     * Kubernetes pod names follow the pattern: {@code <deployment>-<rs-hash>-<pod-hash>}
-     * where both hashes are 5-character alphanumeric suffixes.
-     * This method strips the last two dash-separated segments to get the deployment prefix,
-     * which is used to match events emitted against the ReplicaSet or Deployment.
-     * </p>
-     * <p>
-     * Example: {@code my-app-7d9f8b6c4-xk2pq} → {@code my-app}
-     * </p>
-     *
-     * @param podName the full pod name
-     * @return the deployment prefix, or empty string if the name has fewer than 3 segments
-     */
-    private String derivePodPrefix(String podName) {
-        if (podName == null || podName.isEmpty()) return "";
-        String[] parts = podName.split("-");
-        // Need at least 3 parts: <name>-<rs-hash>-<pod-hash>
-        if (parts.length < 3) return "";
-        // Rejoin all parts except the last two
-        StringBuilder prefix = new StringBuilder();
-        for (int i = 0; i < parts.length - 2; i++) {
-            if (i > 0) prefix.append('-');
-            prefix.append(parts[i]);
-        }
-        return prefix.toString();
-    }
 
     /**
      * Extracts a numeric value from a Prometheus instant-query response.
