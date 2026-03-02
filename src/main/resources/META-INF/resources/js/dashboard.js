@@ -1211,10 +1211,11 @@ function getLatestDashboardSessionId() {
 function escapeHtml(str) {
     if (!str) return '';
     return String(str)
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>')
-        .replace(/"/g, '"');
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 /**
@@ -1297,11 +1298,8 @@ function removeTypingIndicator() {
 function markdownToHtml(text) {
     if (!text) return '';
 
-    // Escape HTML first
-    let html = text
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>');
+    // Escape HTML first via escapeHtml() to prevent XSS before applying markdown transforms
+    let html = escapeHtml(text);
 
     // Code blocks (``` ... ```)
     html = html.replace(/```([\s\S]*?)```/g, (_, code) =>
@@ -1314,14 +1312,24 @@ function markdownToHtml(text) {
     // Bold
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
-    // Numbered list lines  (1. item)
-    html = html.replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>');
-
-    // Bullet list lines  (- item or * item)
-    html = html.replace(/^[-*]\s+(.+)$/gm, '<li>$1</li>');
-
-    // Wrap consecutive <li> in <ol> or <ul>
-    html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>');
+    // Numbered list blocks (1. item)
+    // Group consecutive numbered lines into a single <ol>...</ol> block
+    html = html.replace(/^(?:\d+\.\s+.+\n?)+/gm, function (block) {
+        var lines = block.trim().split(/\n/);
+        var items = lines.map(function (line) {
+            return line.replace(/^\d+\.\s+(.+)$/, '<li>$1</li>');
+        }).join('');
+        return '<ol>' + items + '</ol>';
+    });
+    // Bullet list blocks (- item or * item)
+    // Group consecutive bullet lines into a single <ul>...</ul> block
+    html = html.replace(/^(?:[-*]\s+.+\n?)+/gm, function (block) {
+        var lines = block.trim().split(/\n/);
+        var items = lines.map(function (line) {
+            return line.replace(/^[-*]\s+(.+)$/, '<li>$1</li>');
+        }).join('');
+        return '<ul>' + items + '</ul>';
+    });
 
     // Newlines → <br> (outside block elements)
     html = html.replace(/\n/g, '<br>');
