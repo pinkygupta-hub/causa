@@ -54,7 +54,6 @@ public class KubernetesMcpClient {
     @Inject
     KubernetesClient kubernetesClient;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
     private final ObjectMapper yamlMapper = new ObjectMapper(new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
 
     /**
