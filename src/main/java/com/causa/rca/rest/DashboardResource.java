@@ -101,7 +101,8 @@ public class DashboardResource {
                     .data("page", page)
                     .data("pageSize", defaultPageSize)
                     .data("hasNext", analyses.size() == defaultPageSize)
-                    .data("hasPrevious", page > 0);
+                    .data("hasPrevious", page > 0)
+                    .data("error", null);
                     
         } catch (Exception e) {
             LOG.error("Error rendering dashboard", e);

@@ -1237,7 +1237,7 @@ function getLatestDashboardSessionId() {
 }
 
 /**
- * Escape HTML special characters for safe insertion into innerHTML
+ * Escape HTML special characters to prevent XSS in text content
  */
 function escapeHtml(str) {
     if (!str) return '';
@@ -1287,12 +1287,12 @@ function appendMessage(text, cssClass) {
     bubble.className = 'message-bubble';
 
     // User messages are rendered as plain text to prevent XSS from keyboard input.
-    // Bot messages go through markdownToHtml which escapes HTML before applying
-    // safe structural transforms (bold, code, lists), so innerHTML is safe there.
+    // Bot messages go through markdownToFragment which builds a DocumentFragment
+    // entirely via DOM API — no innerHTML or HTML string assignment is used.
     if (cssClass === 'user-message') {
         bubble.textContent = text;
     } else {
-        bubble.innerHTML = markdownToHtml(text);
+        bubble.appendChild(markdownToFragment(text));
     }
 
     wrapper.appendChild(bubble);
@@ -1327,49 +1327,125 @@ function removeTypingIndicator() {
 }
 
 /**
- * Minimal markdown → HTML converter for chat messages
- * Supports: **bold**, `code`, ```code blocks```, numbered/bullet lists, newlines
+ * Minimal markdown → DocumentFragment converter for chat messages.
+ * Supports: **bold**, `code`, ```code blocks```, numbered/bullet lists, newlines.
+ * All text content is set via textContent — no innerHTML is used anywhere.
  */
-function markdownToHtml(text) {
-    if (!text) return '';
+function markdownToFragment(text) {
+    const fragment = document.createDocumentFragment();
+    if (!text) return fragment;
 
-    // Escape HTML first via escapeHtml() to prevent XSS before applying markdown transforms
-    let html = escapeHtml(text);
+    // Split on code blocks first to handle them separately
+    const codeBlockRe = /```([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match;
 
-    // Code blocks (``` ... ```)
-    html = html.replace(/```([\s\S]*?)```/g, (_, code) =>
-        `<pre><code>${code.trim()}</code></pre>`
-    );
+    while ((match = codeBlockRe.exec(text)) !== null) {
+        // Process inline content before this code block
+        if (match.index > lastIndex) {
+            appendInlineNodes(fragment, text.slice(lastIndex, match.index));
+        }
+        // Append <pre><code>...</code></pre> with textContent
+        const pre = document.createElement('pre');
+        const code = document.createElement('code');
+        code.textContent = match[1].trim();
+        pre.appendChild(code);
+        fragment.appendChild(pre);
+        lastIndex = codeBlockRe.lastIndex;
+    }
 
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Process any remaining text after the last code block
+    if (lastIndex < text.length) {
+        appendInlineNodes(fragment, text.slice(lastIndex));
+    }
 
-    // Bold
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    return fragment;
+}
 
-    // Numbered list blocks (1. item)
-    // Group consecutive numbered lines into a single <ol>...</ol> block
-    html = html.replace(/^(?:\d+\.\s+.+\n?)+/gm, function (block) {
-        var lines = block.trim().split(/\n/);
-        var items = lines.map(function (line) {
-            return line.replace(/^\d+\.\s+(.+)$/, '<li>$1</li>');
-        }).join('');
-        return '<ol>' + items + '</ol>';
-    });
-    // Bullet list blocks (- item or * item)
-    // Group consecutive bullet lines into a single <ul>...</ul> block
-    html = html.replace(/^(?:[-*]\s+.+\n?)+/gm, function (block) {
-        var lines = block.trim().split(/\n/);
-        var items = lines.map(function (line) {
-            return line.replace(/^[-*]\s+(.+)$/, '<li>$1</li>');
-        }).join('');
-        return '<ul>' + items + '</ul>';
-    });
+/**
+ * Parse a plain-text segment (no fenced code blocks) into DOM nodes supporting:
+ * **bold**, `inline code`, numbered lists, bullet lists, and newlines → <br>.
+ * Appends resulting nodes to the given parent.
+ */
+function appendInlineNodes(parent, text) {
+    // Split into lines to detect list blocks
+    const lines = text.split('\n');
+    let i = 0;
 
-    // Newlines → <br> (outside block elements)
-    html = html.replace(/\n/g, '<br>');
+    while (i < lines.length) {
+        const line = lines[i];
 
-    return html;
+        // Numbered list item: "1. text"
+        if (/^\d+\.\s+/.test(line)) {
+            const ol = document.createElement('ol');
+            while (i < lines.length && /^\d+\.\s+/.test(lines[i])) {
+                const li = document.createElement('li');
+                appendStyledText(li, lines[i].replace(/^\d+\.\s+/, ''));
+                ol.appendChild(li);
+                i++;
+            }
+            parent.appendChild(ol);
+            continue;
+        }
+
+        // Bullet list item: "- text" or "* text"
+        if (/^[-*]\s+/.test(line)) {
+            const ul = document.createElement('ul');
+            while (i < lines.length && /^[-*]\s+/.test(lines[i])) {
+                const li = document.createElement('li');
+                appendStyledText(li, lines[i].replace(/^[-*]\s+/, ''));
+                ul.appendChild(li);
+                i++;
+            }
+            parent.appendChild(ul);
+            continue;
+        }
+
+        // Regular line: append inline styled text + <br> for newline
+        appendStyledText(parent, line);
+        // Add <br> between lines (but not after the very last line)
+        if (i < lines.length - 1) {
+            parent.appendChild(document.createElement('br'));
+        }
+        i++;
+    }
+}
+
+/**
+ * Parse inline markdown (**bold** and `code`) in a plain-text segment
+ * and append the resulting nodes to the given parent element.
+ * All text is set via textContent — no innerHTML used.
+ */
+function appendStyledText(parent, text) {
+    // Tokenise on **bold** and `inline code` markers
+    const tokenRe = /(`[^`]+`|\*\*[^*]+\*\*)/g;
+    let last = 0;
+    let m;
+
+    while ((m = tokenRe.exec(text)) !== null) {
+        // Plain text before this token
+        if (m.index > last) {
+            parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+        }
+        const token = m[0];
+        if (token.startsWith('`')) {
+            // Inline code
+            const code = document.createElement('code');
+            code.textContent = token.slice(1, -1);
+            parent.appendChild(code);
+        } else {
+            // Bold
+            const strong = document.createElement('strong');
+            strong.textContent = token.slice(2, -2);
+            parent.appendChild(strong);
+        }
+        last = tokenRe.lastIndex;
+    }
+
+    // Remaining plain text
+    if (last < text.length) {
+        parent.appendChild(document.createTextNode(text.slice(last)));
+    }
 }
 
 // Expose to global scope for inline onclick handlers

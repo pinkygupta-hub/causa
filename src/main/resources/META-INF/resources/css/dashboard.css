@@ -1507,15 +1507,21 @@ body {
     position: fixed;
     bottom: 28px;
     right: 28px;
-    z-index: 9999;
+    z-index: 10000;
     /* No flex layout — children are independently positioned */
+    pointer-events: none; /* let clicks pass through to the toggle when panel is hidden */
 }
 
-/* Toggle Button — sits at the bottom-right corner */
+/* Re-enable pointer events on the panel itself */
+.chatbot-widget .chatbot-panel {
+    pointer-events: auto;
+}
+
+/* Toggle Button — fixed at the bottom-right corner of the viewport */
 .chatbot-toggle {
-    position: absolute;
-    bottom: 0;
-    right: 0;
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
     width: 58px;
     height: 58px;
     border-radius: 50%;
@@ -1528,6 +1534,7 @@ body {
     justify-content: center;
     transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     flex-shrink: 0;
+    z-index: 10001;
 }
 
 .chatbot-toggle:hover {
