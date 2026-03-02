@@ -3,6 +3,10 @@
  * Handles DataTables initialization, tab switching, sidebar collapse, and workload scanning
  */
 
+// Guards to prevent concurrent/duplicate DataTable initialization
+let dashboardTableLoading = false;
+let workloadsTableLoading = false;
+
 // Initialize when DOM is ready
 $(document).ready(function() {
     console.log('CAUSA Dashboard loaded');
@@ -163,12 +167,13 @@ function loadDashboard() {
         return;
     }
     
-    // Check if dashboard table is already initialized
-    if ($.fn.DataTable.isDataTable('#dashboardTable')) {
-        console.log('Dashboard table already initialized');
+    // Prevent concurrent or duplicate initialization
+    if (dashboardTableLoading || $.fn.DataTable.isDataTable('#dashboardTable')) {
+        console.log('Dashboard table already initialized or loading');
         return;
     }
-    
+    dashboardTableLoading = true;
+
     // Show loading
     loadingIndicator.style.display = 'block';
     dashboardContent.style.display = 'none';
@@ -198,6 +203,7 @@ function loadDashboard() {
             }
         })
         .catch(error => {
+            dashboardTableLoading = false;
             console.error('Error loading dashboard:', error);
             if (loadingIndicator) {
                 const errDiv = document.createElement('div');
@@ -281,6 +287,13 @@ function populateDashboardTable(analyses) {
         tbody.appendChild(row);
     });
     
+    dashboardTableLoading = false;
+
+    // Destroy existing DataTable instance if present (safety net)
+    if ($.fn.DataTable.isDataTable('#dashboardTable')) {
+        $('#dashboardTable').DataTable().destroy();
+    }
+
     // Initialize DataTable
     $('#dashboardTable').DataTable({
         pageLength: 25,
@@ -316,12 +329,13 @@ function populateDashboardTable(analyses) {
 function loadWorkloads() {
     console.log('Loading workloads...');
     
-    // Check if table is already initialized
-    if ($.fn.DataTable.isDataTable('#workloadsTable')) {
-        console.log('Workloads table already initialized');
+    // Prevent concurrent or duplicate initialization
+    if (workloadsTableLoading || $.fn.DataTable.isDataTable('#workloadsTable')) {
+        console.log('Workloads table already initialized or loading');
         return;
     }
-    
+    workloadsTableLoading = true;
+
     // Fetch workloads from API
     fetch('/api/workloads')
         .then(response => {
@@ -334,6 +348,7 @@ function loadWorkloads() {
             populateWorkloadsTable(data);
         })
         .catch(error => {
+            workloadsTableLoading = false;
             console.error('Error loading workloads:', error);
             showWorkloadsError('Failed to load workloads. Please try again.');
         });
@@ -403,6 +418,13 @@ function populateWorkloadsTable(workloads) {
         tbody.appendChild(row);
     });
     
+    workloadsTableLoading = false;
+
+    // Destroy existing DataTable instance if present (safety net)
+    if ($.fn.DataTable.isDataTable('#workloadsTable')) {
+        $('#workloadsTable').DataTable().destroy();
+    }
+
     // Initialize DataTable
     $('#workloadsTable').DataTable({
         pageLength: 25,
