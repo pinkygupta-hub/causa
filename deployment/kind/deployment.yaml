@@ -40,7 +40,7 @@ spec:
       serviceAccountName: rca-agent-sa
       containers:
       - name: rca-agent
-        image: quay.io/rh-ee-shesaxen/rca-agent:poc_2.2
+        image: quay.io/rh-ee-shesaxen/rca-agent:poc_test12
         imagePullPolicy: Always
         ports:
         - containerPort: 9090
@@ -48,6 +48,14 @@ spec:
         # Ollama Configuration
         - name: OLLAMA_BASE_URL
           value: "http://ollama.default.svc.cluster.local:11434"
+        - name: OLLAMA_DETECTOR_MODEL
+          value: "llama2:7b-chat-q8_0"
+        - name: OLLAMA_RCA_MODEL
+          value: "llama2:7b-chat-q8_0"
+        - name: OLLAMA_VALIDATOR_MODEL
+          value: "llama2:7b-chat-q8_0"
+        - name: OLLAMA_EMBEDDING_MODEL
+          value: "llama2:7b-chat-q8_0"
         # Prometheus Configuration
         - name: PROMETHEUS_URL
           value: "http://prometheus-k8s.monitoring.svc.cluster.local:9090"
@@ -65,6 +73,9 @@ spec:
           value: "ALERT_DRIVEN"
         # Cryostat Configuration (optional)
         - name: CRYOSTAT_ENABLED
+          value: "false"
+        # RAG Configuration
+        - name: RAG_ENABLED
           value: "false"
         resources:
           limits:
