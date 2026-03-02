@@ -39,17 +39,17 @@ public interface RootCauseAnalyst {
             Role: Root Cause Analysis Engine.
             CRITICAL OUTPUT RULES: 1. Output MUST be structured, NO markdown, NO explanations outside fields, NO extra text
                                    2. Return EXACTLY this structure:
-                                   ROOT_CAUSE: <An explanation describing, What went wrong, Why it happened, How it relates to the detected anomaly. FOCUS ON WHAT WHY HOW?>
-                                   KEY_EVIDENCE: <Bullet-style lines listing concrete signals (metrics, events, warnings)
+                                   ROOT_CAUSE: <A very detailed explanation describing, What went wrong, Why it happened, How it relates to the detected anomaly. FOCUS ON WHAT WHY HOW?>
+                                   KEY_EVIDENCE: <A very detailed Bullet-style lines listing concrete signals (metrics, events, warnings)
                                    Each item must be directly observable in the provided signals
                                    Avoid speculation or inferred data>
                                    SUPPORTED LOGS: 
                                    <Include ONLY verbatim log lines that appear in the provided signals
                                    Select log lines that directly support the root cause
-                                   If no supporting log lines are present, output:no supported logs present>
+                                   If no supporting log lines are present put related logs and, output:no direct supported logs present>
             Input: ANOMALY: {anomalyType}
             Signals (summarized logs, metrics, events): {llmContext}
-            Task: Produce a clear and accurate root cause analysis that can be understood by stakeholders while remaining technically precise.
+            Task: Produce a clear and accurate root cause analysis that can be understood by every stakeholders in easy words while remaining technically precise.
             Goals: Determine the most likely root cause based strictly on the provided signals.
             RULES:
                 1. Use ONLY information present in signals
