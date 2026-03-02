@@ -255,14 +255,6 @@ function populateDashboardTable(analyses) {
         podDiv.textContent = analysis.podName;
         tdPod.appendChild(podDiv);
 
-        // Anomaly type cell
-        const tdAnomaly = document.createElement('td');
-        tdAnomaly.className = 'anomaly-type';
-        const badge = document.createElement('span');
-        badge.className = 'badge badge-warning';
-        badge.textContent = anomalyType;
-        tdAnomaly.appendChild(badge);
-
         // Issue title cell
         const tdIssue = document.createElement('td');
         tdIssue.className = 'issue-title';
@@ -283,7 +275,6 @@ function populateDashboardTable(analyses) {
         row.appendChild(tdTimestamp);
         row.appendChild(tdNamespace);
         row.appendChild(tdPod);
-        row.appendChild(tdAnomaly);
         row.appendChild(tdIssue);
         row.appendChild(tdActions);
         
