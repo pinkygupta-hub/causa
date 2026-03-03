@@ -657,22 +657,6 @@
     ">✅ Copied to clipboard!</div>
 
     <script>
-        // Auto-refresh this page (not dashboard) when analysis is in progress
-        (function() {
-            const currentUrl = window.location.href;
-            // Only auto-refresh if we're on an analysis details page
-            if (currentUrl.includes('/dashboard/analysis/')) {
-                const statusBadge = document.querySelector('.status-badge');
-                const inProgressStatuses = ['INITIATED', 'COLLECTING_DATA', 'DETECTING_ANOMALY', 'ANALYZING_RCA', 'VALIDATING'];
-                const isInProgress = statusBadge && inProgressStatuses.some(s => statusBadge.textContent.toUpperCase().includes(s.replace('_', ' ')));
-                if (isInProgress) {
-                    setTimeout(function() {
-                        window.location.href = currentUrl;
-                    }, 5000);
-                }
-            }
-        })();
-
         function viewLogsSection(link) {
             // Expand the Context Details section if collapsed, then navigate to anchor
             var contextSection = document.querySelector('.context-details-section');
