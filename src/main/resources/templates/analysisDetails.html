@@ -6,6 +6,11 @@
     <title>Analysis Details - CAUSA</title>
     <link rel="icon" type="image/png" href="/logo.png">
     <link rel="stylesheet" href="/css/dashboard.css">
+    <!-- jQuery (required for chatbot) -->
+    <script
+        src="https://code.jquery.com/jquery-3.7.1.min.js"
+        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+        crossorigin="anonymous"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
@@ -24,6 +29,13 @@
             </div>
         </div>
     </header>
+
+    <!-- Inline chatbot session context — read by dashboard.js -->
+    <div id="analysisPageMeta"
+         data-session-id="{session.sessionId}"
+         data-pod-name="{session.podName}"
+         data-namespace="{session.namespace}"
+         style="display:none;"></div>
 
     <div class="dashboard-container" x-data="{
         evidenceExpanded: true,
@@ -550,6 +562,83 @@
         </section>
     </div>
 
+    <!-- Chatbot Widget (Floating) -->
+    <!-- Floating toggle button — shown when panel is closed -->
+    <button id="chatbotToggle" class="chatbot-toggle" title="Ask CAUSA AI">
+        <span class="chatbot-toggle-icon">💬</span>
+    </button>
+
+    <!-- Chat Panel — shown when toggle is clicked -->
+    <div id="chatbotWidget" class="chatbot-widget">
+        <div id="chatbotPanel" class="chatbot-panel" style="display: none;">
+            <!-- Chat Header -->
+            <div class="chatbot-header">
+                <div class="chatbot-header-left">
+                    <img src="/logo.png" alt="CAUSA" class="chatbot-logo">
+                    <div>
+                        <div class="chatbot-title">CAUSA AI</div>
+                        <div class="chatbot-subtitle">Root Cause Assistant</div>
+                    </div>
+                </div>
+                <div class="chatbot-header-actions">
+                    <button class="chatbot-change-pod-btn" id="chatbotChangePod" title="Switch pod context" onclick="resetPodContext()" style="display:none;">
+                        🔄 Change Pod
+                    </button>
+                    <button class="chatbot-close" id="chatbotClose" title="Close">✕</button>
+                </div>
+            </div>
+
+            <!-- Active Pod Context Bar -->
+            <div class="chatbot-pod-context" id="chatbotPodContext" style="display:none;">
+                <span class="pod-context-icon">🟢</span>
+                <span class="pod-context-label" id="chatbotPodLabel">No pod selected</span>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="chat-message bot-message">
+                    <div class="message-bubble">
+                        <p>👋 Hi! I'm the CAUSA AI assistant. I'm already loaded with the analysis for <strong>{session.podName}</strong>. Use the quick actions below or ask me anything about this workload.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Action Buttons -->
+            <div class="chatbot-quick-actions" id="chatbotQuickActions">
+                <p class="quick-actions-label">Quick Actions for SRE / Dev</p>
+                <div class="quick-actions-grid">
+                    <button class="quick-action-btn" onclick="chatQuickAction('explain-root-cause')" title="Plain-English explanation of what broke and why">
+                        <span class="qa-icon">🔍</span>
+                        <span class="qa-label">Explain Root Cause</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="chatQuickAction('immediate-mitigation')" title="kubectl commands and steps to stabilise the workload right now">
+                        <span class="qa-icon">⚡</span>
+                        <span class="qa-label">Immediate Mitigation</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="chatQuickAction('permanent-fix')" title="Recommended solution to prevent recurrence">
+                        <span class="qa-icon">💡</span>
+                        <span class="qa-label">Recommended Solution</span>
+                    </button>
+                    <button class="quick-action-btn" onclick="chatQuickAction('draft-incident-ticket')" title="Pre-filled incident / JIRA ticket ready to copy-paste">
+                        <span class="qa-icon">📋</span>
+                        <span class="qa-label">Draft Incident Ticket</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chatbot-input-area">
+                <div class="chatbot-input-row">
+                    <input type="text" id="chatbotInput" class="chatbot-input"
+                           placeholder="Ask me something..." autocomplete="off"
+                           onkeydown="if(event.key==='Enter') sendChatMessage()">
+                    <button class="chatbot-send-btn" onclick="sendChatMessage()" title="Send">
+                        <span>➤</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Toast notification for clipboard copy -->
     <div id="bob-toast" style="
         display: none;
@@ -698,5 +787,6 @@
             copyToClipboard(parts.join('\n'));
         }
     </script>
+    <script src="/js/dashboard.js"></script>
 </body>
 </html>

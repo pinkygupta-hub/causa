@@ -593,21 +593,26 @@ function initChatbot() {
 
 /**
  * Try to pick up a session ID from the current page context.
- * On the analysis-details page the URL contains the session ID.
+ * On the analysis-details page, reads from metadata element or URL.
  * On the dashboard we use the first unhealthy analysis.
  */
 function resolveChatbotSession() {
-    // Analysis details page: /dashboard/analysis/<sessionId>
+    // Analysis details page: check for metadata element first
+    const metaEl = document.getElementById('analysisPageMeta');
+    if (metaEl) {
+        chatbot.currentSessionId = metaEl.dataset.sessionId || null;
+        chatbot.currentPodName   = metaEl.dataset.podName   || null;
+        chatbot.currentNamespace = metaEl.dataset.namespace || null;
+        console.log('Chatbot session resolved from metadata:', chatbot.currentSessionId);
+        updatePodContextBar();
+        return;
+    }
+    
+    // Fallback: try to extract from URL
     const match = window.location.pathname.match(/\/dashboard\/analysis\/([^/]+)/);
     if (match) {
         chatbot.currentSessionId = match[1];
         console.log('Chatbot session resolved from URL:', chatbot.currentSessionId);
-        // Try to populate pod name from the page heading if available
-        const podHeading = document.querySelector('[data-pod-name]');
-        if (podHeading) {
-            chatbot.currentPodName   = podHeading.dataset.podName   || null;
-            chatbot.currentNamespace = podHeading.dataset.namespace  || null;
-        }
         updatePodContextBar();
     }
 }
@@ -913,12 +918,16 @@ function updatePodContextBar() {
     const contextBar  = document.getElementById('chatbotPodContext');
     const podLabel    = document.getElementById('chatbotPodLabel');
     const changePodBtn = document.getElementById('chatbotChangePod');
+    
+    // Check if we're on the analysis details page (pod is fixed, can't change)
+    const isAnalysisPage = !!document.getElementById('analysisPageMeta');
 
     if (chatbot.currentSessionId && chatbot.currentPodName) {
         const ns = chatbot.currentNamespace ? ` · ${chatbot.currentNamespace}` : '';
         if (podLabel)    podLabel.textContent = `${chatbot.currentPodName}${ns}`;
         if (contextBar)  contextBar.style.display = 'flex';
-        if (changePodBtn) changePodBtn.style.display = 'inline-flex';
+        // Hide "Change Pod" button on analysis details page
+        if (changePodBtn) changePodBtn.style.display = isAnalysisPage ? 'none' : 'inline-flex';
     } else {
         if (contextBar)  contextBar.style.display = 'none';
         if (changePodBtn) changePodBtn.style.display = 'none';
@@ -1070,16 +1079,28 @@ function fetchAnalysisAndRespond(sessionId, callback) {
 /**
  * Build a JIRA-style ticket object from report + session data.
  * Maps to actual RcaReport fields: title, issue, evidence, supportedLogs,
- * validationConfidence, validationNotes, validationChecklist
+ * validationConfidence, validationTrace
  */
 function buildJiraTicket(report, session) {
     const logLines = (report.supportedLogs && report.supportedLogs.length)
         ? report.supportedLogs.map(l => `  - ${l}`).join('\n')
         : '  N/A';
 
-    const checklistLines = (report.validationChecklist && report.validationChecklist.length)
-        ? report.validationChecklist.map(l => `  - ${l}`).join('\n')
-        : '  N/A';
+    // Format validation trace items
+    let validationTraceLines = '  N/A';
+    if (report.validationTrace && report.validationTrace.length) {
+        validationTraceLines = report.validationTrace.map(item => {
+            const parts = [];
+            if (item.claim) parts.push(`*Claim:* ${item.claim}`);
+            if (item.decision) parts.push(`*Decision:* ${item.decision}`);
+            if (item.confidence != null) parts.push(`*Confidence:* ${Math.round(item.confidence * 100)}%`);
+            if (item.notes) parts.push(`*Notes:* ${item.notes}`);
+            if (item.evidenceFound && item.evidenceFound.length) {
+                parts.push(`*Evidence:* ${item.evidenceFound.join(', ')}`);
+            }
+            return '  • ' + parts.join(' | ');
+        }).join('\n');
+    }
 
     const confidence = report.validationConfidence != null
         ? `${Math.round(report.validationConfidence * 100)}%`
@@ -1107,11 +1128,8 @@ function buildJiraTicket(report, session) {
             `*Supported Logs:*`,
             logLines,
             '',
-            `*Validation Notes:*`,
-            report.validationNotes || 'N/A',
-            '',
-            `*Validation Checklist:*`,
-            checklistLines
+            `*Validation Trace:*`,
+            validationTraceLines
         ].join('\n')
     };
 }
@@ -1460,3 +1478,5 @@ function appendStyledText(parent, text) {
 window.sendChatMessage  = sendChatMessage;
 window.chatQuickAction  = chatQuickAction;
 window.toggleChatbot    = toggleChatbot;
+
+
