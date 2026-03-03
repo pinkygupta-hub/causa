@@ -934,6 +934,10 @@ body {
     padding: var(--spacing-lg);
 }
 
+.content-box.issue-highlight {
+    border: 2px solid var(--color-accent);
+}
+
 .issue-title {
     font-size: 1.125rem;
     font-weight: 600;
