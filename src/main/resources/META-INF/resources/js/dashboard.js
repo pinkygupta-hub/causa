@@ -1397,6 +1397,21 @@ function appendInlineNodes(parent, text) {
     }
 }
 
+
+function toggleEvidence(btn) {
+
+    const content = btn.parentElement.nextElementSibling;
+
+    if (content.classList.contains("collapsed")) {
+    content.classList.remove("collapsed");
+    btn.innerText = "Collapse";
+} else {
+    content.classList.add("collapsed");
+    btn.innerText = "Expand";
+}
+
+}
+
 /**
  * Parse inline markdown (**bold** and `code`) in a plain-text segment
  * and append the resulting nodes to the given parent element.

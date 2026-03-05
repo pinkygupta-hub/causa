@@ -192,89 +192,128 @@
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 5. VALIDATION SUMMARY                                           -->
+        <!-- RCA VALIDATION WORKFLOW                                        -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        {#if session.report.validationSummary || (session.report.validationTrace && !session.report.validationTrace.isEmpty()) || (session.report.missingData && !session.report.missingData.isEmpty()) || (session.report.riskFactors && !session.report.riskFactors.isEmpty())}
+        {#if session.report.assertions && !session.report.assertions.isEmpty()}
         <section class="details-section">
-            <div class="section-header expandable" @click="checklistExpanded = !checklistExpanded">
+
+            <div class="section-header">
                 <h2 class="section-title">
-                    <span>Validation Summary</span>
+                    <span>Validation Analysis</span>
                 </h2>
-                <span class="expand-icon" x-text="checklistExpanded ? '▲' : '▼'">▲</span>
             </div>
-            <div x-show="checklistExpanded" x-collapse>
 
-                <!-- Overall Assessment -->
-                {#if session.report.validationSummary}
-                <div class="content-box validation-notes-box">
-                    <div class="validation-notes-label">Overall Assessment</div>
-                    <div class="evidence-content">{session.report.validationSummary}</div>
+            <!-- ISSUE -->
+            <div class="workflow-issue">
+                <div class="workflow-label">Issue</div>
+                <div class="workflow-box">
+                    {session.report.issue}
                 </div>
-                {/if}
+            </div>
 
-                <!-- Validation Trace -->
-                {#if session.report.validationTrace && !session.report.validationTrace.isEmpty()}
-                <div class="content-box logs-box" style="margin-top: 8px;">
-                    <div class="validation-notes-label">Validation Trace</div>
-                    <div class="logs-content">
-                        {#for item in session.report.validationTrace}
-                        <div class="log-entry checklist-entry" style="flex-direction: column; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--border-color);">
-                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                                <span class="log-bullet">•</span>
-                                <span class="log-text" style="font-weight: 600;">{item.claim}</span>
-                                <span class="status-badge {item.decision == 'Supported' ? 'status-completed' : (item.decision == 'Weakly Supported' ? 'status-detecting' : 'status-failed')}" style="font-size: 0.7rem; padding: 2px 6px;">{item.decision}</span>
-                                {#if item.confidence}
-                                <span class="truncation-badge">{item.formattedConfidence}</span>
+
+            <!-- MODEL QUESTIONS -->
+            <div class="workflow-questions">
+                <div class="workflow-label">Challenges & Model Analysis Questions</div>
+
+                <ul>
+                    {#for a in session.report.assertions}
+                        {#for q in a.modelAnalysisQuestions}
+                            <li>{q}</li>
+                        {/for}
+                    {/for}
+                </ul>
+            </div>
+
+
+            <!-- ASSERTIONS -->
+            <div class="workflow-assertions-grid">
+
+                {#for a in session.report.assertions}
+                    <div class="assertion-card">
+
+                        <div class="assertion-title">
+                            {a.assertion}
+                        </div>
+
+                        <div class="assertion-evidence">
+
+                            <!-- Header -->
+                            <div class="evidence-header"
+                                 @click="evidenceExpanded = !evidenceExpanded"
+                                 style="cursor:pointer">
+
+                                <span class="evidence-title">Evidence</span>
+
+                                <span class="expand-icon"
+                                      x-text="evidenceExpanded ? '▼' : '▶'">
+        </span>
+
+                            </div>
+
+                            <!-- Expandable Content -->
+                            <div x-show="evidenceExpanded"
+                                 x-transition
+                                 class="evidence-content">
+
+                                {#if a.matchedLogs && !a.matchedLogs.isEmpty()}
+                                    <ul>
+                                        {#for log in a.matchedLogs}
+                                            <li>{log}</li>
+                                        {/for}
+                                    </ul>
+                                {#else}
+                                    <span>No evidence found</span>
                                 {/if}
-                            </div>
-                            {#if item.notes}
-                            <div style="margin-left: 20px; margin-top: 4px; color: var(--text-secondary); font-size: 0.85rem;">{item.notes}</div>
-                            {/if}
-                            {#if item.evidenceFound && !item.evidenceFound.isEmpty()}
-                            <div style="margin-left: 20px; margin-top: 4px; font-size: 0.8rem; color: var(--text-muted);">
-                                Evidence: {#for e in item.evidenceFound}<span style="display: block; font-family: monospace;">{e}</span>{/for}
-                            </div>
-                            {/if}
-                        </div>
-                        {/for}
-                    </div>
-                </div>
-                {/if}
 
-                <!-- Missing Data -->
-                {#if session.report.missingData && !session.report.missingData.isEmpty()}
-                <div class="content-box logs-box" style="margin-top: 8px;">
-                    <div class="validation-notes-label" style="color: var(--warning-color);">⚠ Missing Data</div>
-                    <div class="logs-content">
-                        {#for item in session.report.missingData}
-                        <div class="log-entry">
-                            <span class="log-bullet">•</span>
-                            <span class="log-text">{item}</span>
-                        </div>
-                        {/for}
-                    </div>
-                </div>
-                {/if}
+                            </div>
 
-                <!-- Risk Factors -->
-                {#if session.report.riskFactors && !session.report.riskFactors.isEmpty()}
-                <div class="content-box logs-box" style="margin-top: 8px;">
-                    <div class="validation-notes-label" style="color: var(--error-color);">⚡ Risk Factors</div>
-                    <div class="logs-content">
-                        {#for item in session.report.riskFactors}
-                        <div class="log-entry">
-                            <span class="log-bullet">•</span>
-                            <span class="log-text">{item}</span>
                         </div>
-                        {/for}
+
+                        <div class="assertion-judgment">
+
+                            <div class="judgment-status {a.judgmentCall.decision == 'Supported' ? 'supported' : 'unsupported'}">
+
+                                ✔ {a.judgmentCall.decision}
+
+                            </div>
+
+                            <div class="judgment-confidence">
+                                Confidence: {a.judgmentCall.confidence}
+                            </div>
+
+                            <div class="judgment-reasoning">
+                                {a.judgmentCall.reasoning}
+                            </div>
+
+                        </div>
+
                     </div>
-                </div>
-                {/if}
+                {/for}
 
             </div>
-        </section>
-        {/if}
 
+
+            <!-- FINAL DECISION -->
+            <div class="workflow-final">
+
+                <div class="final-title">
+                    Final Decision
+                </div>
+
+                <div class="final-status {session.report.finalDecision.status == 'Fully Supported' ? 'supported' : 'partial'}">
+
+                    ✔ {session.report.finalDecision.status}
+
+                </div>
+
+                <div class="final-summary">
+                    {session.report.finalDecision.summary}
+                </div>
+
+            </div>
+
+        </section>
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -514,7 +553,7 @@
             </div>
         </section>
         {/if}
-
+        {/if}
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 9. MODEL INFORMATION + SESSION ID                               -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
