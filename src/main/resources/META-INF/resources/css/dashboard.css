@@ -934,6 +934,10 @@ body {
     padding: var(--spacing-lg);
 }
 
+.content-box.issue-highlight {
+    border: 2px solid var(--color-accent);
+}
+
 .issue-title {
     font-size: 1.125rem;
     font-weight: 600;
@@ -1615,6 +1619,7 @@ body {
     transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
     flex-shrink: 0;
     z-index: 10001;
+    pointer-events: auto;
 }
 
 .chatbot-toggle:hover {
@@ -4513,4 +4518,5 @@ body {
         bottom: 70px;
         right: 0;
     }
+
 }
