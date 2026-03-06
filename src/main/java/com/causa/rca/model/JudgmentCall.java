@@ -13,11 +13,18 @@ public class JudgmentCall {
 
     public String reasoning;
 
+    public String matchType;
+
     public JudgmentCall() {}
 
-    public JudgmentCall(String decision, double confidence, String reasoning) {
+    public JudgmentCall(String decision, double confidence, String reasoning, String matchType) {
         this.decision = decision;
         this.confidence = confidence;
         this.reasoning = reasoning;
+        this.matchType = matchType;
+    }
+
+    public int getConfidencePercent() {
+        return (int) Math.round(confidence * 100);
     }
 }

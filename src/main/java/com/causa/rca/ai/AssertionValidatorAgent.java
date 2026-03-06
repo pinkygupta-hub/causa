@@ -8,61 +8,91 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 public interface AssertionValidatorAgent {
 
     @UserMessage("""
-You MUST return ONLY valid JSON.
+You MUST return ONLY valid JSON. No explanation, no markdown, no text outside JSON.
 
-If you output anything outside JSON the response will be discarded.
-Do not write explanations before or after JSON.
-
+═══════════════════════════════════════════════
 TASK
-Validate whether the ASSERTION is supported by log lines in CONTEXT_SUMMARIES.
+═══════════════════════════════════════════════
+Determine whether ASSERTION is supported by evidence in CONTEXT_SUMMARIES.
+Evidence may be DIRECT (exact wording) or INDIRECT (semantic implication).
 
-RULES
-1. Extract EXACT log lines from CONTEXT_SUMMARIES that support the ASSERTION.
-2. matchedLogs must contain the exact log text copied from CONTEXT_SUMMARIES.
-   matchedLogs MUST contain exact log lines.
-               If log line contains quotes, remove the quotes.
-               Do not escape characters.
-3. If NO log line supports the assertion → matchedLogs MUST be [].
-4. judgementCall MUST follow this rule:
+═══════════════════════════════════════════════
+EVIDENCE MATCHING RULES  — read carefully
+═══════════════════════════════════════════════
 
-   matchedLogs.length > 0 → "Supported"
-   matchedLogs.length == 0 → "Unsupported"
+DIRECT match (strongest):
+  The log line contains the same keywords or wording as the assertion.
+  Example assertion : "Container runtime network was not ready"
+  Example log line  : "NetworkNotReady: container runtime network not ready"
+  → This IS a direct match. Add it to matchedLogs.
 
-5. NEVER return "Supported" if matchedLogs is empty.
-6. Do NOT invent or paraphrase logs.
+INDIRECT / SEMANTIC match (also valid):
+  The log line does not use the same words but strongly implies the condition.
+  Examples of valid indirect matches:
+    Assertion: "OOM kill occurred"
+      → log: "OOMKilled" or "Killing process … out of memory" or "memory limit exceeded"
+    Assertion: "Certificate renewal failed"
+      → log: "failed to renew cert" or "x509: certificate has expired" or "acme: error"
+    Assertion: "Controller conflict prevented update"
+      → log: "leader election lost" or "resource version conflict" or "optimistic locking"
+    Assertion: "Pod could not be scheduled"
+      → log: "Insufficient cpu" or "0/3 nodes available" or "FailedScheduling"
 
-OUTPUT JSON FORMAT
+  If a log line is an indirect match, STILL add it to matchedLogs.
+  Copy the log line EXACTLY as it appears in CONTEXT_SUMMARIES. Do not paraphrase.
 
+PARTIAL match (permitted when no better match exists):
+  If no direct or indirect match exists, check for:
+  - Any log mentioning the same COMPONENT referenced in the assertion
+  - Any log mentioning the same ERROR CLASS (e.g., timeout, auth, cert, network, oom)
+  If a partial match exists → add it and set judgementCall to "Partially Supported"
+
+NO match:
+  If truly no log line relates to the assertion in any way →
+  matchedLogs MUST be [] and judgementCall MUST be "Unsupported"
+
+═══════════════════════════════════════════════
+JUDGEMENT RULES
+═══════════════════════════════════════════════
+"Supported"           → 1+ direct or indirect matched log lines
+"Partially Supported" → only partial/component-level matches, or low confidence
+"Unsupported"         → matchedLogs is [] after genuine search
+
+NEVER return "Supported" with empty matchedLogs.
+NEVER return "Unsupported" if any relevant log line exists — even indirect.
+
+═══════════════════════════════════════════════
+CONFIDENCE SCORING
+═══════════════════════════════════════════════
+0.9 – 1.0 : Direct keyword match in log
+0.7 – 0.8 : Clear semantic / indirect match
+0.5 – 0.6 : Partial or component-level match
+0.2 – 0.4 : No evidence found (Unsupported)
+
+═══════════════════════════════════════════════
+modelAnalysisQuestions — REQUIRED, exactly 3
+═══════════════════════════════════════════════
+Questions must be:
+- Specific to this assertion (not generic)
+- Focused on log evidence
+- Designed to challenge the assertion logically
+
+Bad (too generic):  "Do logs contain errors?"
+Good (specific):    "Do logs show a certificate expiry event before the controller restart?"
+
+═══════════════════════════════════════════════
+OUTPUT FORMAT — return exactly this schema
+═══════════════════════════════════════════════
 {
   "matchedLogs": [],
-  "modelAnalysisQues": [
-    "Do logs show evidence supporting this assertion?",
-    "Does the error occur before the failure event?",
-    "Is the component mentioned in logs related to the assertion?"
-  ],
-  "judgementCall": "Supported",
+  "matchType": "direct|indirect|partial|none",
+  "modelAnalysisQuestions": [],
+  "judgementCall": "Supported|Partially Supported|Unsupported",
   "confidence": 0.0,
-  "reasoning": "short technical explanation"
+  "reasoning": "1–2 sentence technical explanation referencing the log evidence"
 }
 
-EXAMPLE OUTPUT
-
-{
-  "matchedLogs": [
-    "Operation cannot be fulfilled on certificates.cert-manager.io \"cert-manager-ingress-cert\": the object has been modified; please apply your changes to the latest version and try again"
-  ],
-  "modelAnalysisQues": [
-    "Do logs show evidence supporting this assertion?",
-    "Does the error occur before the failure event?",
-    "Is the component mentioned in logs related to the assertion?"
-  ],
-  "judgementCall": "Supported",
-  "confidence": 0.85,
-  "reasoning": "Log shows optimistic locking preventing certificate updates."
-}
-
-ASSERTION:
-{assertion}
+ASSERTION: {assertion}
 
 CONTEXT_SUMMARIES:
 {llmContext}

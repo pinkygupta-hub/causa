@@ -16,7 +16,7 @@ public class RcaReport {
     public String issue;
     public String evidence;
     public List<String> supportedLogs;
-
+    public List<String> validationChecks;
     public List<AssertionItem> assertions;
     public FinalDecision finalDecision;
 
@@ -27,11 +27,13 @@ public class RcaReport {
                      String evidence,
                      List<String> supportedLogs,
                      List<AssertionItem> assertions,
+                     List<String> validationChecks,
                      FinalDecision finalDecision) {
         this.title = title;
         this.issue = issue;
         this.evidence = evidence;
         this.supportedLogs = supportedLogs;
+        this.validationChecks = validationChecks;
         this.assertions = assertions;
         this.finalDecision = finalDecision;
     }
@@ -41,7 +43,7 @@ public class RcaReport {
                      String issue,
                      String evidence,
                      List<String> supportedLogs) {
-        this(title, issue, evidence, supportedLogs, null, null);
+        this(title, issue, evidence, supportedLogs, null, null, null);
     }
 
     @Override
@@ -67,6 +69,14 @@ public class RcaReport {
             sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
             sb.append("║ Supported Logs:                                                                    ║\n");
             for (String log : supportedLogs) {
+                appendWrapped(sb, "  • " + log);
+            }
+        }
+
+        if (validationChecks != null && !validationChecks.isEmpty()) {
+            sb.append("╠════════════════════════════════════════════════════════════════════════════════════╣\n");
+            sb.append("║ Assertion Challenge:                                                                    ║\n");
+            for (String log : validationChecks) {
                 appendWrapped(sb, "  • " + log);
             }
         }
