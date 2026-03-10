@@ -201,7 +201,7 @@
                 </div>
             </div>
         </section>
-        {/if}
+    {/if}
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- 5. VALIDATION ANALYSIS                                          -->
@@ -329,6 +329,8 @@
 
     </section>
     {/if}
+
+        {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 6. ANALYSIS METADATA                                            -->
@@ -807,26 +809,39 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
+        var cards = document.querySelectorAll(".assertion-card-js");
+        var totalConf = 0;
+        var confCount = 0;
+        var supported = 0;
+        var partial = 0;
+        var unsupported = 0;
 
-        let cards = document.querySelectorAll(".assertion-card-js");
-        let total = 0;
-        let count = 0;
-
-        cards.forEach(c => {
-            let conf = parseFloat(c.dataset.confidence);
+        cards.forEach(function(c) {
+            var conf = parseFloat(c.dataset.confidence);
             if (!isNaN(conf)) {
-                total += conf;
-                count++;
+                totalConf += conf;
+                confCount++;
             }
+            var decision = c.dataset.decision;
+            if (decision === 'Supported') supported++;
+            else if (decision === 'Partially Supported') partial++;
+            else unsupported++;
         });
 
-        if (count > 0) {
-            let avg = Math.round((total / count) * 100);
+        if (confCount > 0) {
+            var avg = Math.round((totalConf / confCount) * 100);
             document.getElementById("avg-confidence").innerText = avg + "%";
         }
 
+        // FIX: populate pill counts that were previously always empty
+        var elSupported = document.getElementById("count-supported");
+        var elPartial = document.getElementById("count-partial");
+        var elUnsupported = document.getElementById("count-unsupported");
+        if (elSupported) elSupported.innerText = supported;
+        if (elPartial) elPartial.innerText = partial;
+        if (elUnsupported) elUnsupported.innerText = unsupported;
     });
 </script>
-    <script src="/js/dashboard.js"></script>
+<script src="/js/dashboard.js"></script>
 </body>
 </html>
