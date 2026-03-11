@@ -2,10 +2,6 @@ package com.causa.rca.service;
 
 import com.causa.rca.ai.*;
 import com.causa.rca.model.RcaReport;
-import com.causa.rca.model.RcaAnalysisSession;
-import com.causa.rca.model.AnalysisStatus;
-import com.causa.rca.model.artifact.CollectedArtifacts;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -20,6 +16,10 @@ import org.jboss.logging.Logger;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.context.ManagedExecutor;
 
+import com.causa.rca.model.RcaAnalysisSession;
+import com.causa.rca.model.AnalysisStatus;
+import com.causa.rca.model.artifact.CollectedArtifacts;
+
 import java.util.*;
 
 
@@ -33,22 +33,30 @@ public class RcaOrchestrator {
 
     private static final Logger LOG = Logger.getLogger(RcaOrchestrator.class);
 
+    @Inject
+    DataCollectorService dataCollector;
 
-    // ─────────────────────────────────────────────────────────────
-    // AI Agents
-    // ─────────────────────────────────────────────────────────────
+    @Inject
+    AnomalyDetector anomalyDetector;
 
     @Inject RcaAssertionExtractor rcaAssertionExtractor;
     @Inject AssertionValidatorAgent assertionValidator;
 
+    @Inject
+    RootCauseAnalyst rootCauseAnalyst;
 
-    // ─────────────────────────────────────────────────────────────
-    // Core Services
-    // ─────────────────────────────────────────────────────────────
+    @Inject
+    AnalysisTrackingService trackingService;
 
-    @Inject DataCollectorService dataCollector;
-    @Inject AnalysisTrackingService trackingService;
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
+    String detectorModel;
 
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.rca.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
+    String rcaModel;
+
+    @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",
+            defaultValue = "http://ollama.default.svc.cluster.local:11434")
+    String ollamaBaseUrl;
 
     // ─────────────────────────────────────────────────────────────
     // Async Execution
@@ -56,19 +64,7 @@ public class RcaOrchestrator {
 
     @Inject ManagedExecutor executor;
 
-
-    // ─────────────────────────────────────────────────────────────
-    // Configuration
-    // ─────────────────────────────────────────────────────────────
-
-    @ConfigProperty(
-            name = "quarkus.langchain4j.ollama.base-url",
-            defaultValue = "http://ollama.default.svc.cluster.local:11434")
-    String ollamaBaseUrl;
-
-
     ManagedContext requestContext = Arc.container().requestContext();
-
 
     // ─────────────────────────────────────────────────────────────
     // Async Entry Point
@@ -104,33 +100,87 @@ public class RcaOrchestrator {
 
         try {
 
-            // ─────────────────────────────────────────────────────
-            // Step 1 — Data Collection
-            // ─────────────────────────────────────────────────────
-
+            // ── Step 0: Data Collection ───────────────────────────────────────
             trackingService.recordStageStart(sessionId, "data_collection");
-            trackingService.updateStatus(
-                    sessionId,
-                    AnalysisStatus.COLLECTING_DATA,
-                    "Collecting metrics, logs, and events"
-            );
+            trackingService.updateStatus(sessionId, AnalysisStatus.COLLECTING_DATA,
+                    "Collecting metrics, logs, and events from Kubernetes");
 
-            CollectedArtifacts artifacts =
-                    dataCollector.collectArtifacts(namespace, podName);
+            CollectedArtifacts artifacts = dataCollector.collectArtifacts(namespace, podName);
 
+            // The compact LLM context – summaries only, never raw data
             String llmContext = artifacts.toLlmContext();
 
+            LOG.info("Data collection complete for " + podName
+                    + " | tokens=" + artifacts.tokenCount
+                    + " | truncated=" + artifacts.truncationApplied
+                    + " | llmContextLength=" + llmContext.length());
+            LOG.debug("LLM context:\n" + llmContext);
+
+            // Persist full artifacts to MongoDB so UX can display raw evidence
             trackingService.storeArtifacts(sessionId, artifacts);
+
             trackingService.recordStageEnd(sessionId, "data_collection");
 
             LOG.info("Artifacts collected. tokens=" + artifacts.tokenCount);
 
-
             ObjectMapper mapper = new ObjectMapper();
+            // ── Step 1: Anomaly Detection ─────────────────────────────────────
+            trackingService.recordStageStart(sessionId, "anomaly_detection");
+            trackingService.updateStatus(sessionId, AnalysisStatus.DETECTING_ANOMALY,
+                    "Analyzing data to detect anomalies using AI");
 
+            LOG.info("Step 1: Anomaly Detection with model: " + detectorModel);
 
-            String rcaOutput =
-                    "ROOT_CAUSE: Kubernetes control plane unable to update certificates due to controller conflict.";
+            String rawAnomaly;
+            try {
+                // LLM receives ONLY the compact summary context
+                rawAnomaly = anomalyDetector.detectAnomaly(llmContext);
+                LOG.info("RAW Anomaly Detector Response: [" + rawAnomaly + "]");
+            } catch (Exception e) {
+                String errorMsg = buildModelErrorMessage("anomaly detection", detectorModel, e);
+                LOG.error(errorMsg, e);
+                throw new RuntimeException(errorMsg, e);
+            }
+
+            // Parse anomaly type token from raw response.
+            // Handles both clean single-token responses ("OOM_KILLED") and
+            // verbose responses like "ANAMOLY_TYPE: OTHERS" or "ANOMALY_TYPE: HEALTHY"
+            String anomalyType = parseAnomalyType(rawAnomaly);
+            LOG.info("Sanitized Anomaly Type: [" + anomalyType + "]");
+            trackingService.recordStageEnd(sessionId, "anomaly_detection");
+
+            if (anomalyType.isEmpty()
+                    || "HEALTHY".equalsIgnoreCase(anomalyType)
+                    || anomalyType.toUpperCase().contains("HEALTHY")) {
+                LOG.info("System is healthy – skipping RCA and Validation.");
+                RcaReport healthyReport = new RcaReport(
+                        "System Healthy", "No anomaly detected",
+                        "Metrics within normal range", null,null,null,null);
+                trackingService.markHealthy(sessionId, healthyReport);
+                return;
+            }
+
+            // ── Step 2: Root Cause Analysis ───────────────────────────────────
+            trackingService.recordStageStart(sessionId, "rca_analysis");
+            trackingService.updateStatus(sessionId, AnalysisStatus.ANALYZING_RCA,
+                    "Performing root cause analysis for: " + anomalyType);
+
+            LOG.info("Step 2: Root Cause Analysis with model: " + rcaModel);
+
+            String rcaOutput;
+            try {
+                // LLM receives ONLY the compact summary context
+                rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, llmContext);
+                LOG.info("RAW RCA Result: [" + rcaOutput + "]");
+            } catch (Exception e) {
+                String errorMsg = buildModelErrorMessage("root cause analysis", rcaModel, e);
+                LOG.error(errorMsg, e);
+                throw new RuntimeException(errorMsg, e);
+            }
+            trackingService.recordStageEnd(sessionId, "rca_analysis");
+
+            // ── Step 3: Validation & Formatting ──────────────────────────────
+            trackingService.recordStageStart(sessionId, "validation");
 
 
             // ─────────────────────────────────────────────────────
@@ -499,5 +549,70 @@ public class RcaOrchestrator {
         fallback.put("reasoning", raw);
 
         return mapper.valueToTree(fallback);
+    }
+    /**
+     * Parses the anomaly type token from the raw LLM response.
+     * <p>
+     * Handles both clean single-token responses (e.g. {@code "OOM_KILLED"}) and
+     * verbose responses where the model prefixes the token with a label, e.g.:
+     * <ul>
+     *   <li>{@code "ANAMOLY_TYPE: OTHERS"}</li>
+     *   <li>{@code "ANOMALY_TYPE: HEALTHY"}</li>
+     *   <li>{@code "ANOMALY: CPU_THROTTLING"}</li>
+     * </ul>
+     * The valid token set is: OOM_KILLED, GC_PAUSE, CPU_THROTTLING, CRASH_LOOP,
+     * IMAGE_PULL_BACKOFF, HEALTHY, OTHERS.
+     *
+     * @param raw the raw string returned by the anomaly detector LLM
+     * @return the extracted anomaly type token in uppercase, or {@code "OTHERS"} if unparseable
+     */
+    private String parseAnomalyType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "OTHERS";
+        }
+
+        // Valid tokens (including common misspelling "ANAMOLY")
+        java.util.Set<String> validTokens = java.util.Set.of(
+                "OOM_KILLED", "GC_PAUSE", "CPU_THROTTLING", "CRASH_LOOP",
+                "IMAGE_PULL_BACKOFF", "HEALTHY", "OTHERS");
+
+        // 1. Check if the response contains "KEY: VALUE" pattern (e.g. "ANAMOLY_TYPE: OTHERS")
+        //    Search all lines for a colon-separated value that matches a valid token
+        for (String line : raw.split("\n")) {
+            if (line.contains(":")) {
+                String value = line.substring(line.indexOf(':') + 1).split("#")[0].trim().toUpperCase();
+                if (validTokens.contains(value)) {
+                    return value;
+                }
+            }
+        }
+
+        // 2. Scan each line for a standalone valid token
+        for (String line : raw.split("\n")) {
+            String candidate = line.split("#")[0].trim().toUpperCase();
+            if (validTokens.contains(candidate)) {
+                return candidate;
+            }
+        }
+
+        // 3. Scan word-by-word across the entire response
+        for (String word : raw.toUpperCase().split("[\\s,.:;\\[\\]()]+")) {
+            if (validTokens.contains(word)) {
+                return word;
+            }
+        }
+
+        // 4. Fallback: return first non-empty line token, uppercased
+        String firstLine = raw.split("\n")[0].split("#")[0].trim().toUpperCase();
+        return firstLine.isEmpty() ? "OTHERS" : firstLine;
+    }
+
+    private String buildModelErrorMessage(String stage, String model, Exception cause) {
+        return String.format(
+                "Failed to perform %s using model '%s' at %s. "
+                        + "Ensure the model is available: "
+                        + "kubectl exec -it <ollama-pod> -- ollama pull %s. "
+                        + "Cause: %s",
+                stage, model, ollamaBaseUrl, model, cause.getMessage());
     }
 }
