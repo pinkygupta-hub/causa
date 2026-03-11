@@ -211,14 +211,17 @@ public class RcaOrchestrator {
                         String lower = line.toLowerCase();
 
                         boolean signal =
-                                lower.contains("error")
-                                        || lower.contains("failed")
-                                        || lower.contains("exception")
-                                        || lower.contains("timeout")
-                                        || lower.contains("killed")
-                                        || lower.contains("oom")
-                                        || lower.contains("backoff")
-                                        || lower.contains("unable");
+                                line.toLowerCase().contains("error")
+                                        || line.toLowerCase().contains("failed")
+                                        || line.toLowerCase().contains("exception")
+                                        || line.toLowerCase().contains("timeout")
+                                        || line.toLowerCase().contains("killed")
+                                        || line.toLowerCase().contains("oom")
+                                        || line.toLowerCase().contains("backoff")
+                                        || line.toLowerCase().contains("unable")
+                                        || line.toLowerCase().contains("conflict")
+                                        || line.toLowerCase().contains("certificate")
+                                        || line.toLowerCase().contains("network");
 
                         if (signal) {
                             matchedLogs.add(line);
@@ -295,17 +298,6 @@ public class RcaOrchestrator {
 
                     judgement = "Unsupported";
                     confidence = 0.2;
-                }
-
-                if (!matchedLogs.isEmpty()
-                        && "Unsupported".equals(judgement)) {
-
-                    LOG.warn(
-                            "Logs found but model returned Unsupported. Upgrading."
-                    );
-
-                    judgement = "Partially Supported";
-                    confidence = Math.max(confidence, 0.5);
                 }
 
 
@@ -403,7 +395,7 @@ public class RcaOrchestrator {
                     mapper.writerWithDefaultPrettyPrinter()
                             .writeValueAsString(finalReport);
 
-            LOG.info("Final Structured Report:\n" + finalJson);
+            LOG.info("Final Structured Report pinky 1:\n" + finalJson);
 
 
             RcaReport report =
@@ -468,21 +460,29 @@ public class RcaOrchestrator {
                 .replace("```", "")
                 .trim();
 
-        int start = raw.indexOf("{\"");
-        if (start == -1) {
-            start = raw.indexOf("{\n");
-        }
-
+        int start = raw.indexOf("{");
         int end = raw.lastIndexOf("}");
 
         if (start != -1 && end != -1 && end > start) {
 
             String json = raw.substring(start, end + 1);
 
+            // ─────────────────────────────────
+            // LLM JSON Repair (critical)
+            // ─────────────────────────────────
+
+            json = json
+                    .replaceAll(",\\s*]", "]")   // remove trailing commas in arrays
+                    .replaceAll(",\\s*}", "}")   // remove trailing commas in objects
+                    .replaceAll("\\\\n", " ")    // remove escaped newlines
+                    .trim();
+
             try {
                 return mapper.readTree(json);
             } catch (Exception e) {
-                LOG.error("Invalid JSON returned by model:\n" + json);
+
+                LOG.error("Invalid JSON returned by model after cleanup:\n" + json);
+
                 throw e;
             }
         }

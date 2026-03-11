@@ -59,7 +59,7 @@ JUDGEMENT RULES
 "Unsupported"         → matchedLogs is [] after genuine search
 
 NEVER return "Supported" with empty matchedLogs.
-NEVER return "Unsupported" if any relevant log line exists — even indirect.
+Only consider logs related to the same component, resource, or failure type as the assertion. If logs are unrelated, return Unsupported.
 
 ═══════════════════════════════════════════════
 CONFIDENCE SCORING
@@ -70,7 +70,7 @@ CONFIDENCE SCORING
 0.2 – 0.4 : No evidence found (Unsupported)
 
 ═══════════════════════════════════════════════
-modelAnalysisQuestions — REQUIRED, exactly 3
+modelAnalysisQuestions — return 2–3 questions
 ═══════════════════════════════════════════════
 Questions must be:
 - Specific to this assertion (not generic)

@@ -8,96 +8,45 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 public interface RcaAssertionExtractor {
 
     @UserMessage("""
-Return ONLY valid JSON.
-No explanation.
-No markdown.
-No nested objects.
-Do NOT repeat the input.
+Return ONLY valid JSON. No explanation, no markdown.
 Stop immediately after the closing }.
 
-═══════════════════════════════════════════════
 TASK
-═══════════════════════════════════════════════
-Extract the ISSUE and derive ASSERTIONS from the RCA text.
+Extract the ISSUE and generate ASSERTIONS from the RCA text.
 
-═══════════════════════════════════════════════
-ISSUE EXTRACTION RULE
-═══════════════════════════════════════════════
-
-If the RCA text explicitly states the root cause or issue,
-the field "issueIdentified" MUST contain that exact text.
-
-Do NOT rewrite, summarize, or reinterpret it.
-
-If the RCA text starts with:
-
+ISSUE RULE
+If the RCA text contains:
 ROOT_CAUSE: <text>
 
-Then extract ONLY the text after "ROOT_CAUSE:".
+Extract only the text after ROOT_CAUSE as "issueIdentified".
+Do NOT rewrite or summarize it.
 
-Example:
-
-Input:
-ROOT_CAUSE: Kubernetes control plane unable to update certificates due to controller conflict.
-
-Output issueIdentified:
-"Kubernetes control plane unable to update certificates due to controller conflict"
-
-═══════════════════════════════════════════════
-ASSERTION GENERATION RULES
-═══════════════════════════════════════════════
-
-Assertions must represent **verifiable technical claims**
-that can later be validated against logs.
-
-Rules:
-
-1. Each assertion must represent ONE technical claim.
-2. Split cause, effect, and symptoms into separate assertions.
-3. Avoid long combined sentences.
-4. Always produce 2–3 assertions when possible.
-5. Assertions must be STRINGS only.
-6. Assertions must be concise and technical.
+ASSERTION RULES
+- Generate 2–3 assertions.
+- Each assertion must be ONE technical claim.
+- Assertions must be short and log-verifiable.
+- Do not repeat the issue text.
+- Avoid vague phrases like "system failed".
 
 Good examples:
-
 "Controller conflict prevented certificate reconciliation"
-
+"Certificate reconciliation attempts failed"
 "Certificate update operations failed in the Kubernetes control plane"
 
-"TLS certificate resources could not be updated due to controller conflict"
-
-Bad examples:
-
-"The system failed"
-
-"There was an error"
-
-═══════════════════════════════════════════════
 OUTPUT FORMAT
-═══════════════════════════════════════════════
-
-Return exactly this JSON structure:
-
 {
   "issueIdentified": "",
   "assertions": []
 }
 
 Rules:
-
 - assertions must be an array of strings
-- produce between 2 and 4 assertions
-- do not repeat the issue text verbatim
-- do not include nested objects
+- 2–3 assertions preferred
+- no nested objects
 
-═══════════════════════════════════════════════
 INPUT
-═══════════════════════════════════════════════
-
 RCA_TEXT:
 {rcaOutput}
-
 """)
     String extract(@V("rcaOutput") String rcaOutput);
 }
