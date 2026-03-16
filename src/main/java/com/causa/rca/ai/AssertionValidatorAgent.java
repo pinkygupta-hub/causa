@@ -8,93 +8,62 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 public interface AssertionValidatorAgent {
 
     @UserMessage("""
-You MUST return ONLY valid JSON. No explanation, no markdown, no text outside JSON.
+Return ONLY valid JSON. No explanation or extra text.
 
-═══════════════════════════════════════════════
 TASK
-═══════════════════════════════════════════════
-Determine whether ASSERTION is supported by evidence in CONTEXT_SUMMARIES.
-Evidence may be DIRECT (exact wording) or INDIRECT (semantic implication).
+Evaluate whether ASSERTION is supported by the provided MATCHED_LOGS.
 
-═══════════════════════════════════════════════
-EVIDENCE MATCHING RULES  — read carefully
-═══════════════════════════════════════════════
+IMPORTANT
+MATCHED_LOGS were already selected as potential evidence.
+Your job is ONLY to evaluate them.
 
-DIRECT match (strongest):
-  The log line contains the same keywords or wording as the assertion.
-  Example assertion : "Container runtime network was not ready"
-  Example log line  : "NetworkNotReady: container runtime network not ready"
-  → This IS a direct match. Add it to matchedLogs.
+════════ JUDGEMENT RULES ════════
 
-INDIRECT / SEMANTIC match (also valid):
-  The log line does not use the same words but strongly implies the condition.
-  Examples of valid indirect matches:
-    Assertion: "OOM kill occurred"
-      → log: "OOMKilled" or "Killing process … out of memory" or "memory limit exceeded"
-    Assertion: "Certificate renewal failed"
-      → log: "failed to renew cert" or "x509: certificate has expired" or "acme: error"
-    Assertion: "Controller conflict prevented update"
-      → log: "leader election lost" or "resource version conflict" or "optimistic locking"
-    Assertion: "Pod could not be scheduled"
-      → log: "Insufficient cpu" or "0/3 nodes available" or "FailedScheduling"
+Supported
+→ logs clearly confirm the assertion.
 
-  If a log line is an indirect match, STILL add it to matchedLogs.
-  Copy the log line EXACTLY as it appears in CONTEXT_SUMMARIES. Do not paraphrase.
+Partially Supported
+→ logs relate to the failure but do not fully prove the assertion.
 
-PARTIAL match (permitted when no better match exists):
-  If no direct or indirect match exists, check for:
-  - Any log mentioning the same COMPONENT referenced in the assertion
-  - Any log mentioning the same ERROR CLASS (e.g., timeout, auth, cert, network, oom)
-  If a partial match exists → add it and set judgementCall to "Partially Supported"
+Unsupported
+→ MATCHED_LOGS is empty or unrelated to the assertion.
 
-NO match:
-  If truly no log line relates to the assertion in any way →
-  matchedLogs MUST be [] and judgementCall MUST be "Unsupported"
+NEVER return Supported with empty matchedLogs.
 
-═══════════════════════════════════════════════
-JUDGEMENT RULES
-═══════════════════════════════════════════════
-"Supported"           → 1+ direct or indirect matched log lines
-"Partially Supported" → only partial/component-level matches, or low confidence
-"Unsupported"         → matchedLogs is [] after genuine search
+════════ CONFIDENCE ════════
 
-NEVER return "Supported" with empty matchedLogs.
-Only consider logs related to the same component, resource, or failure type as the assertion. If logs are unrelated, return Unsupported.
+0.9–1.0  Direct log evidence  
+0.7–0.8  Clear semantic implication  
+0.5–0.6  Partial evidence  
+0.2–0.4  Unsupported
 
-═══════════════════════════════════════════════
-CONFIDENCE SCORING
-═══════════════════════════════════════════════
-0.9 – 1.0 : Direct keyword match in log
-0.7 – 0.8 : Clear semantic / indirect match
-0.5 – 0.6 : Partial or component-level match
-0.2 – 0.4 : No evidence found (Unsupported)
+════════ MODEL ANALYSIS QUESTIONS ════════
 
-═══════════════════════════════════════════════
-modelAnalysisQuestions — return 2–3 questions
-═══════════════════════════════════════════════
-Questions must be:
-- Specific to this assertion (not generic)
-- Focused on log evidence
-- Designed to challenge the assertion logically
+Return 2–3 questions challenging the assertion using the logs.
 
-Bad (too generic):  "Do logs contain errors?"
-Good (specific):    "Do logs show a certificate expiry event before the controller restart?"
+Questions must:
+- reference the logs
+- challenge the RCA reasoning
+- not be generic
 
-═══════════════════════════════════════════════
-OUTPUT FORMAT — return exactly this schema
-═══════════════════════════════════════════════
+Example:
+"Do logs show OOMKilled before the container restart?"
+
+════════ OUTPUT FORMAT ════════
+
 {
   "matchedLogs": [],
   "matchType": "direct|indirect|partial|none",
   "modelAnalysisQuestions": [],
   "judgementCall": "Supported|Partially Supported|Unsupported",
   "confidence": 0.0,
-  "reasoning": "1–2 sentence technical explanation referencing the log evidence"
+  "reasoning": "1–2 sentence explanation referencing the logs"
 }
 
-ASSERTION: {assertion}
+ASSERTION:
+{assertion}
 
-CONTEXT_SUMMARIES:
+MATCHED_LOGS:
 {llmContext}
 """)
     String validate(

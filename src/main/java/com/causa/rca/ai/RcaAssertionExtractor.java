@@ -12,26 +12,45 @@ Return ONLY valid JSON. No explanation, no markdown.
 Stop immediately after the closing }.
 
 TASK
-Extract the ISSUE and generate ASSERTIONS from the RCA text.
+Extract the ISSUE and ASSERTIONS from the ROOT_CAUSE text.
 
 ISSUE RULE
-If the RCA text contains:
+If the input contains:
+
 ROOT_CAUSE: <text>
 
-Extract only the text after ROOT_CAUSE as "issueIdentified".
-Do NOT rewrite or summarize it.
+Extract ONLY the text after ROOT_CAUSE as "issueIdentified".
+Do NOT rewrite, summarize, or modify the sentence.
 
 ASSERTION RULES
-- Generate 2–3 assertions.
-- Each assertion must be ONE technical claim.
-- Assertions must be short and log-verifiable.
-- Do not repeat the issue text.
-- Avoid vague phrases like "system failed".
 
-Good examples:
-"Controller conflict prevented certificate reconciliation"
-"Certificate reconciliation attempts failed"
-"Certificate update operations failed in the Kubernetes control plane"
+Assertions must be SMALLER pieces of the ROOT_CAUSE sentence.
+
+Important constraints:
+
+- Assertions MUST reuse the same keywords that appear in the ROOT_CAUSE.
+- Do NOT introduce new terminology.
+- Do NOT invent new causes.
+- Do NOT change wording significantly.
+
+Assertions should simply break the root cause into
+short verifiable statements using the SAME words.
+
+GOOD EXAMPLE
+
+ROOT_CAUSE:
+"The container heap-oom-prom was killed due to an out-of-memory error."
+
+GOOD ASSERTIONS:
+"Container was killed due to out-of-memory"
+"Container terminated with OOM error"
+
+BAD ASSERTIONS:
+"Application crash occurred"
+"System instability detected"
+"Hardware failure happened"
+
+Generate 2–3 assertions maximum.
 
 OUTPUT FORMAT
 {
@@ -41,11 +60,11 @@ OUTPUT FORMAT
 
 Rules:
 - assertions must be an array of strings
-- 2–3 assertions preferred
+- assertions must reuse keywords from issueIdentified
 - no nested objects
 
 INPUT
-RCA_TEXT:
+ROOT_CAUSE_TEXT:
 {rcaOutput}
 """)
     String extract(@V("rcaOutput") String rcaOutput);
