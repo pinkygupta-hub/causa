@@ -4503,6 +4503,58 @@ body {
     font-weight:600;
     margin-bottom:6px;
 }
+
+/* ── Tab Navigation ── */
+.page-tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 1.5rem;
+}
+
+.page-tab-btn {
+    padding: 0.6rem 1.4rem;
+    font-size: 0.9rem;
+    font-weight: 400;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: #6b7280;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.15s, border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-tab-btn:hover {
+    color: #111;
+}
+
+.page-tab-btn.tab-active {
+    color: #111;
+    border-bottom-color: #111;
+    font-weight: 600;
+}
+
+.tab-status-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 99px;
+    line-height: 1.4;
+}
+
+.tab-status-badge.badge-supported  { background: #eaf3de; color: #3b6d11; }
+.tab-status-badge.badge-partial    { background: #faeeda; color: #854f0b; }
+.tab-status-badge.badge-unsupported{ background: #fcebeb; color: #a32d2d; }
+
+/* ── Tab panel visibility ── */
+.tab-panel { display: none; }
+.tab-panel.tab-panel-active { display: block; }
+
 /* Responsive */
 @media (max-width: 600px) {
     .chatbot-widget {

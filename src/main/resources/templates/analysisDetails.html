@@ -8,36 +8,36 @@
     <link rel="stylesheet" href="/css/dashboard.css">
     <!-- jQuery (required for chatbot) -->
     <script
-        src="https://code.jquery.com/jquery-3.7.1.min.js"
-        integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
-        crossorigin="anonymous"></script>
+            src="https://code.jquery.com/jquery-3.7.1.min.js"
+            integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="
+            crossorigin="anonymous"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body>
-    <!-- Fixed Header -->
-    <header class="dashboard-header">
-        <div class="header-content">
-            <div class="header-left">
-                <a href="/dashboard" class="back-link">
-                    ← Back to Dashboard
-                </a>
-            </div>
-            <div class="header-right">
-                <button onclick="window.location.reload()" class="btn btn-primary">
-                    Refresh
-                </button>
-            </div>
+<!-- Fixed Header -->
+<header class="dashboard-header">
+    <div class="header-content">
+        <div class="header-left">
+            <a href="/dashboard" class="back-link">
+                ← Back to Dashboard
+            </a>
         </div>
-    </header>
+        <div class="header-right">
+            <button onclick="window.location.reload()" class="btn btn-primary">
+                Refresh
+            </button>
+        </div>
+    </div>
+</header>
 
-    <!-- Inline chatbot session context — read by dashboard.js -->
-    <div id="analysisPageMeta"
-         data-session-id="{session.sessionId}"
-         data-pod-name="{session.podName}"
-         data-namespace="{session.namespace}"
-         style="display:none;"></div>
+<!-- Inline chatbot session context — read by dashboard.js -->
+<div id="analysisPageMeta"
+     data-session-id="{session.sessionId}"
+     data-pod-name="{session.podName}"
+     data-namespace="{session.namespace}"
+     style="display:none;"></div>
 
-    <div class="dashboard-container" x-data="{
+<div class="dashboard-container" x-data="{
         evidenceExpanded: true,
         logsExpanded: true,
         checklistExpanded: true,
@@ -49,14 +49,14 @@
         dedupLogsExpanded: false,
         jfrExpanded: false
     }">
-        <!-- Analysis Header -->
-        <section class="analysis-header-section">
-            <h1 class="page-title">
-                <span>Analysis Details</span>
-                <button class="btn-copy-icon" onclick="debugWithBob()" title="Copy to clipboard">📋</button>
-            </h1>
+    <!-- Analysis Header -->
+    <section class="analysis-header-section">
+        <h1 class="page-title">
+            <span>Analysis Details</span>
+            <button class="btn-copy-icon" onclick="debugWithBob()" title="Copy to clipboard">📋</button>
+        </h1>
 
-            {#if session.isInProgress()}
+        {#if session.isInProgress()}
             <div class="progress-section">
                 <div class="progress-label">{session.currentStep}</div>
                 <div class="progress-bar large">
@@ -64,21 +64,49 @@
                 </div>
                 <div class="progress-text">{session.progressPercent}% Complete</div>
             </div>
-            {/if}
-        </section>
+        {/if}
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TAB NAVIGATION                                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <nav class="page-tab-nav">
+        <button class="page-tab-btn tab-active" id="tab-btn-analysis" onclick="switchPageTab('analysis')">
+            Analysis
+        </button>
+        {#if session.report && session.report.assertions && !session.report.assertions.isEmpty()}
+            <button class="page-tab-btn" id="tab-btn-validation" onclick="switchPageTab('validation')">
+                Validation
+                {#if session.report.finalDecision}
+                    {#if session.report.finalDecision.status eq 'Supported'}
+                        <span class="tab-status-badge badge-supported">✔ Supported</span>
+                    {#else if session.report.finalDecision.status eq 'Partially Supported'}
+                        <span class="tab-status-badge badge-partial">◑ Partial</span>
+                    {#else}
+                        <span class="tab-status-badge badge-unsupported">✖ Unsupported</span>
+                    {/if}
+                {/if}
+            </button>
+        {/if}
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TAB PANEL: ANALYSIS                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-panel-analysis" class="tab-panel tab-panel-active">
 
         <!-- Error Information (if failed) -->
         {#if session.status.name() == 'FAILED' && session.errorMessage}
-        <section class="details-section error-section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <span>Error Details</span>
-                </h2>
-            </div>
-            <div class="error-content">
-                <pre>{session.errorMessage}</pre>
-            </div>
-        </section>
+            <section class="details-section error-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span>Error Details</span>
+                    </h2>
+                </div>
+                <div class="error-content">
+                    <pre>{session.errorMessage}</pre>
+                </div>
+            </section>
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -88,7 +116,7 @@
         <div id="pod-namespace-text" style="display:none;">{session.namespace}</div>
         <div id="pod-name-text" style="display:none;">{session.podName}</div>
         {#if session.collectedArtifacts && session.collectedArtifacts.podInfo}
-        <div id="pod-phase-text" style="display:none;">{session.collectedArtifacts.podInfo.phase}</div>
+            <div id="pod-phase-text" style="display:none;">{session.collectedArtifacts.podInfo.phase}</div>
         {/if}
 
         <section class="details-section">
@@ -108,227 +136,100 @@
                     <div class="info-value">{session.podName}</div>
                 </div>
                 {#if session.collectedArtifacts && session.collectedArtifacts.podInfo}
-                <div class="info-item">
-                    <div class="info-label">Last Recorded Phase</div>
-                    <div class="info-value">{session.collectedArtifacts.podInfo.phase}</div>
-                </div>
+                    <div class="info-item">
+                        <div class="info-label">Last Recorded Phase</div>
+                        <div class="info-value">{session.collectedArtifacts.podInfo.phase}</div>
+                    </div>
                 {/if}
                 {#if session.collectedArtifacts && session.collectedArtifacts.podInfo && session.collectedArtifacts.podInfo.containers && !session.collectedArtifacts.podInfo.containers.isEmpty()}
-                <div class="info-item info-item-wide">
-                    <div class="info-label">Container Status</div>
-                    <div class="info-value">
-                        {#for c in session.collectedArtifacts.podInfo.containers}
-                        <div class="container-status-row">
-                            <span class="container-name">{c.name}</span>
-                            <span class="container-badge {c.ready ? 'badge-ready' : 'badge-not-ready'}">{c.ready ? 'Ready' : 'Not Ready'}</span>
-                            <span class="container-detail"><strong>Restart Count:</strong> {c.restartCount}</span>
-                            <span class="container-detail"><strong>Last Recorded State:</strong> {c.currentState}</span>
-                            {#if c.lastTerminatedReason}
-                            <span class="container-detail container-warn"><strong>Last Terminated:</strong> {c.lastTerminatedReason} (exit {c.lastExitCode})</span>
-                            {/if}
+                    <div class="info-item info-item-wide">
+                        <div class="info-label">Container Status</div>
+                        <div class="info-value">
+                            {#for c in session.collectedArtifacts.podInfo.containers}
+                                <div class="container-status-row">
+                                    <span class="container-name">{c.name}</span>
+                                    <span class="container-badge {c.ready ? 'badge-ready' : 'badge-not-ready'}">{c.ready ? 'Ready' : 'Not Ready'}</span>
+                                    <span class="container-detail"><strong>Restart Count:</strong> {c.restartCount}</span>
+                                    <span class="container-detail"><strong>Last Recorded State:</strong> {c.currentState}</span>
+                                    {#if c.lastTerminatedReason}
+                                        <span class="container-detail container-warn"><strong>Last Terminated:</strong> {c.lastTerminatedReason} (exit {c.lastExitCode})</span>
+                                    {/if}
+                                </div>
+                            {/for}
                         </div>
-                        {/for}
                     </div>
-                </div>
                 {/if}
             </div>
         </section>
 
         {#if session.report}
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 2. ISSUE DETECTED                                               -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <section class="details-section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <span>Root Cause Analysis</span>
-                    <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Root Cause Analysis">📋</button>
-                </h2>
-            </div>
-            <div class="content-box issue-highlight">
-                <h3 class="issue-title" id="issue-title-text">{session.report.title}</h3>
-                <div class="issue-description" id="issue-description-text">{session.report.issue}</div>
-            </div>
-        </section>
-
-        <!-- Hidden data for clipboard copy -->
-        <div id="evidence-text" style="display:none;">{session.report.evidence}</div>
-        <div id="supported-logs-text" style="display:none;">{#for log in session.report.supportedLogs}{log}
-{/for}</div>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 3. EVIDENCE                                                      -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <section class="details-section">
-            <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
-                <h2 class="section-title">
-                    <span>Evidence</span>
-                    <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('evidence-section')" title="Copy Evidence">📋</button>
-                </h2>
-                <span class="expand-icon" x-text="evidenceExpanded ? '▲' : '▼'">▲</span>
-            </div>
-            <div class="content-box" x-show="evidenceExpanded" x-collapse>
-                <div class="evidence-content">{session.report.evidence}</div>
-            </div>
-        </section>
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 4. SUPPORTED LOGS                                               -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
-        <section class="details-section" id="supported-logs-section">
-            <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
-                <h2 class="section-title">
-                    <span>Supported Logs</span>
-                    <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('supported-logs-section')" title="Copy Supported Logs">📋</button>
-                </h2>
-                <div class="section-header-actions">
-                    <a href="#context-logs-section" class="btn btn-view-logs btn-small"
-                       onclick="viewLogsSection(this)">
-                        📋 View Logs
-                    </a>
-                    <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▲</span>
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 2. ISSUE DETECTED                                               -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <section class="details-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span>Root Cause Analysis</span>
+                        <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Root Cause Analysis">📋</button>
+                    </h2>
                 </div>
-            </div>
-            <div class="content-box logs-box" x-show="logsExpanded" x-collapse>
-                <div class="logs-content">
-                    {#for log in session.report.supportedLogs}
-                    <div class="log-entry">
-                        <span class="log-bullet">•</span>
-                        <span class="log-text">{log}</span>
+                <div class="content-box issue-highlight">
+                    <h3 class="issue-title" id="issue-title-text">{session.report.title}</h3>
+                    <div class="issue-description" id="issue-description-text">{session.report.issue}</div>
+                </div>
+            </section>
+
+            <!-- Hidden data for clipboard copy -->
+            <div id="evidence-text" style="display:none;">{session.report.evidence}</div>
+            <div id="supported-logs-text" style="display:none;">{#for log in session.report.supportedLogs}{log}
+                {/for}</div>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 3. EVIDENCE                                                      -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <section class="details-section">
+                <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
+                    <h2 class="section-title">
+                        <span>Evidence</span>
+                        <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('evidence-section')" title="Copy Evidence">📋</button>
+                    </h2>
+                    <span class="expand-icon" x-text="evidenceExpanded ? '▲' : '▼'">▲</span>
+                </div>
+                <div class="content-box" x-show="evidenceExpanded" x-collapse>
+                    <div class="evidence-content">{session.report.evidence}</div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            <!-- 4. SUPPORTED LOGS                                               -->
+            <!-- ═══════════════════════════════════════════════════════════════ -->
+            {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
+                <section class="details-section" id="supported-logs-section">
+                    <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
+                        <h2 class="section-title">
+                            <span>Supported Logs</span>
+                            <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('supported-logs-section')" title="Copy Supported Logs">📋</button>
+                        </h2>
+                        <div class="section-header-actions">
+                            <a href="#context-logs-section" class="btn btn-view-logs btn-small"
+                               onclick="viewLogsSection(this)">
+                                📋 View Logs
+                            </a>
+                            <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▲</span>
+                        </div>
                     </div>
-                    {/for}
-                </div>
-            </div>
-        </section>
-    {/if}
-
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- 5. VALIDATION ANALYSIS                                          -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    {#if session.report.assertions && !session.report.assertions.isEmpty()}
-    <section class="details-section validation-section">
-
-        <div class="section-header">
-            <h2 class="section-title"><span>Validation Analysis</span></h2>
-        </div>
-
-        <div class="val-issue-row">
-            <span class="val-issue-label">Detected Issue</span>
-            <div class="val-issue-box">{session.report.issue}</div>
-        </div>
-
-        <div class="val-summary-bar">
-            <div class="val-summary-pills">
-                <span class="val-pill pill-supported">✔ Supported <span class="pill-count" id="count-supported"></span></span>
-                <span class="val-pill pill-partial">◑ Partial <span class="pill-count" id="count-partial"></span></span>
-                <span class="val-pill pill-unsupported">✖ Unsupported <span class="pill-count" id="count-unsupported"></span></span>
-            </div>
-            <div class="val-confidence-avg">Avg confidence: <strong id="avg-confidence">—</strong></div>
-        </div>
-
-        <div class="val-assertions-grid">
-            {#for a in session.report.assertions}
-            {#let cardMod=(a.judgmentCall.decision eq 'Supported' ? 'val-card--supported' : (a.judgmentCall.decision eq 'Partially Supported' ? 'val-card--partial' : 'val-card--unsupported'))}
-            <div class="val-card assertion-card-js {cardMod}"
-                 data-decision="{a.judgmentCall.decision}"
-                 data-confidence="{a.judgmentCall.confidence}"
-                 x-data="{ open: false }">
-
-                <div class="val-card-top">
-                    {#if a.judgmentCall.decision eq 'Supported'}
-                        <span class="val-badge badge--supported">✔ Supported</span>
-                    {#else if a.judgmentCall.decision eq 'Partially Supported'}
-                        <span class="val-badge badge--partial">◑ Partially Supported</span>
-                    {#else}
-                        <span class="val-badge badge--unsupported">✖ Unsupported</span>
-                    {/if}
-
-                    {#if a.judgmentCall.matchType && a.judgmentCall.matchType ne 'none'}
-                        <span class="val-match-type">
-                        {#if a.judgmentCall.matchType eq 'direct'}🎯 direct
-                        {#else if a.judgmentCall.matchType eq 'indirect'}🔗 indirect
-                        {#else if a.judgmentCall.matchType eq 'partial'}◐ partial
-                        {#else}{a.judgmentCall.matchType}
-                        {/if}
-                    </span>
-                    {/if}
-                </div>
-
-                <div class="val-assertion-text">{a.assertion}</div>
-
-                <div class="val-confidence-row">
-                    <span class="val-conf-label">Confidence</span>
-                    <div class="val-conf-track">
-                        {#let confMod=(a.judgmentCall.confidence ge 0.7 ? 'conf--high' : (a.judgmentCall.confidence ge 0.4 ? 'conf--mid' : 'conf--low'))}
-                            <div class="val-conf-fill {confMod}"
-                                 style="width: {a.judgmentCall.confidencePercent}%">
-                            </div>
-                        {/let}
-                    </div>
-                    <span class="val-conf-pct">{a.judgmentCall.confidencePercent}%</span>
-                </div>
-
-                <div class="val-reasoning">{a.judgmentCall.reasoning}</div>
-
-                <div class="val-evidence-toggle" @click="open = !open">
-                    <span>Evidence</span>
-                    <span class="val-evidence-count">
-                        {#if a.matchedLogs && !a.matchedLogs.isEmpty()}{a.matchedLogs.size()} log{#if a.matchedLogs.size() > 1}s{/if}{#else}none{/if}
-                    </span>
-                    <span class="val-chevron" x-text="open ? '▲' : '▼'">▼</span>
-                </div>
-
-                <div x-show="open" x-transition class="val-evidence-body">
-                    {#if a.matchedLogs && !a.matchedLogs.isEmpty()}
-                    {#for log in a.matchedLogs}
-                    <div class="val-log-line">{log}</div>
-                    {/for}
-                    {#else}
-                    <div class="val-no-evidence">No log evidence extracted for this assertion.</div>
-                    {/if}
-                </div>
-
-                    {#if a.modelAnalysisQuestions && !a.modelAnalysisQuestions.isEmpty()}
-                    <details class="val-questions-details">
-                        <summary class="val-questions-summary">
-                            Validation Challenge
-                            <span class="question-count">
-                    ({a.modelAnalysisQuestions.size()} questions)
-                </span>
-                        </summary>
-
-                        <ul class="val-questions-list">
-                            {#for q in a.modelAnalysisQuestions}
-                            <li>{q}</li>
+                    <div class="content-box logs-box" x-show="logsExpanded" x-collapse>
+                        <div class="logs-content">
+                            {#for log in session.report.supportedLogs}
+                                <div class="log-entry">
+                                    <span class="log-bullet">•</span>
+                                    <span class="log-text">{log}</span>
+                                </div>
                             {/for}
-                        </ul>
-                    </details>
-                    {/if}
-
-            </div>
-            {/let}
-            {/for}
-        </div>
-
-        {#let finalMod=(session.report.finalDecision.status eq 'Supported' ? 'val-final--supported' : (session.report.finalDecision.status eq 'Partially Supported' ? 'val-final--partial' : 'val-final--unsupported'))}
-        <div class="val-final {finalMod}">
-            <div class="val-final-left">
-                <div class="val-final-label">Final Validation Result</div>
-                <div class="val-final-status">
-                    {#if session.report.finalDecision.status eq 'Supported'}✔
-                    {#else if session.report.finalDecision.status eq 'Partially Supported'}◑
-                    {#else}✖
-                    {/if}
-                    {session.report.finalDecision.status}
-                </div>
-            </div>
-            <div class="val-final-summary">{session.report.finalDecision.summary}</div>
-        </div>
-        {/let}
-
-    </section>
-    {/if}
+                        </div>
+                    </div>
+                </section>
+            {/if}
 
         {/if}
 
@@ -357,14 +258,14 @@
                     <div class="meta-value">{session.formattedDuration}</div>
                 </div>
                 {#if session.collectedArtifacts}
-                <div class="meta-card">
-                    <div class="meta-label">Token Count (Used For Context)</div>
-                    <div class="meta-value">{session.collectedArtifacts.tokenCount}
-                        {#if session.collectedArtifacts.truncationApplied}
-                        <span class="truncation-badge">truncated</span>
-                        {/if}
+                    <div class="meta-card">
+                        <div class="meta-label">Token Count (Used For Context)</div>
+                        <div class="meta-value">{session.collectedArtifacts.tokenCount}
+                            {#if session.collectedArtifacts.truncationApplied}
+                                <span class="truncation-badge">truncated</span>
+                            {/if}
+                        </div>
                     </div>
-                </div>
                 {/if}
             </div>
         </section>
@@ -373,201 +274,201 @@
         <!-- 7. STAGE PERFORMANCE                                            -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         {#if session.stageTiming && !session.stageTiming.isEmpty() && (session.status.name() == 'COMPLETED' || session.status.name() == 'HEALTHY')}
-        <section class="stage-timing-section">
-            <div class="section-header">
-                <h2 class="section-title">
-                    <span>Stage Performance</span>
-                </h2>
-            </div>
-            <div class="timing-grid">
-                {#if session.stageTiming.containsKey('data_collection')}
-                <div class="timing-card">
-                    <div class="timing-stage">Data Collection</div>
-                    <div class="timing-duration">{session.getFormattedStageDuration('data_collection')}</div>
+            <section class="stage-timing-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span>Stage Performance</span>
+                    </h2>
                 </div>
-                {/if}
-                {#if session.stageTiming.containsKey('anomaly_detection')}
-                <div class="timing-card">
-                    <div class="timing-stage">Anomaly Detection</div>
-                    <div class="timing-duration">{session.getFormattedStageDuration('anomaly_detection')}</div>
+                <div class="timing-grid">
+                    {#if session.stageTiming.containsKey('data_collection')}
+                        <div class="timing-card">
+                            <div class="timing-stage">Data Collection</div>
+                            <div class="timing-duration">{session.getFormattedStageDuration('data_collection')}</div>
+                        </div>
+                    {/if}
+                    {#if session.stageTiming.containsKey('anomaly_detection')}
+                        <div class="timing-card">
+                            <div class="timing-stage">Anomaly Detection</div>
+                            <div class="timing-duration">{session.getFormattedStageDuration('anomaly_detection')}</div>
+                        </div>
+                    {/if}
+                    {#if session.stageTiming.containsKey('rca_analysis')}
+                        <div class="timing-card">
+                            <div class="timing-stage">RCA Analysis</div>
+                            <div class="timing-duration">{session.getFormattedStageDuration('rca_analysis')}</div>
+                        </div>
+                    {/if}
+                    {#if session.stageTiming.containsKey('validation')}
+                        <div class="timing-card">
+                            <div class="timing-stage">Validation</div>
+                            <div class="timing-duration">{session.getFormattedStageDuration('validation')}</div>
+                        </div>
+                    {/if}
                 </div>
-                {/if}
-                {#if session.stageTiming.containsKey('rca_analysis')}
-                <div class="timing-card">
-                    <div class="timing-stage">RCA Analysis</div>
-                    <div class="timing-duration">{session.getFormattedStageDuration('rca_analysis')}</div>
-                </div>
-                {/if}
-                {#if session.stageTiming.containsKey('validation')}
-                <div class="timing-card">
-                    <div class="timing-stage">Validation</div>
-                    <div class="timing-duration">{session.getFormattedStageDuration('validation')}</div>
-                </div>
-                {/if}
-            </div>
-        </section>
+            </section>
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 8. CONTEXT DETAILS (Collected Artifacts — all collapsible)      -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         {#if session.collectedArtifacts}
-        <section class="details-section context-details-section">
-            <div class="section-header expandable" @click="contextExpanded = !contextExpanded">
-                <h2 class="section-title">
-                    <span>Context Details</span>
-                </h2>
-                <span class="expand-icon" x-text="contextExpanded ? '▲' : '▼'">▼</span>
-            </div>
-            <div x-show="contextExpanded" x-collapse>
-
-                <!-- 8a. Metrics -->
-                {#if session.collectedArtifacts.metrics}
-                <div class="artifact-subsection">
-                    <div class="artifact-header expandable" @click="metricsExpanded = !metricsExpanded">
-                        <span class="artifact-title">📊 Metrics</span>
-                        <span class="expand-icon small" x-text="metricsExpanded ? '▲' : '▼'">▼</span>
-                    </div>
-                    <div x-show="metricsExpanded" x-collapse>
-                        <div class="artifact-grid">
-                            <div class="artifact-metric">
-                                <span class="metric-label">Memory Usage</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryUsage}</span>
-                            </div>
-                            <div class="artifact-metric">
-                                <span class="metric-label">Memory Limit</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryLimit}</span>
-                            </div>
-                            <div class="artifact-metric">
-                                <span class="metric-label">Memory %</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryPercent}%</span>
-                            </div>
-                            <div class="artifact-metric">
-                                <span class="metric-label">CPU Usage</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuUsage} cores</span>
-                            </div>
-                            <div class="artifact-metric">
-                                <span class="metric-label">CPU Limit</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuLimit} cores</span>
-                            </div>
-                            <div class="artifact-metric">
-                                <span class="metric-label">CPU %</span>
-                                <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuPercent}%</span>
-                            </div>
-                        </div>
-                        <div class="artifact-summary-box">
-                            <span class="artifact-summary-label">LLM Summary:</span>
-                            <span class="artifact-summary-value mono">{session.collectedArtifacts.metrics.summary}</span>
-                        </div>
-                    </div>
+            <section class="details-section context-details-section">
+                <div class="section-header expandable" @click="contextExpanded = !contextExpanded">
+                    <h2 class="section-title">
+                        <span>Context Details</span>
+                    </h2>
+                    <span class="expand-icon" x-text="contextExpanded ? '▲' : '▼'">▼</span>
                 </div>
-                {/if}
+                <div x-show="contextExpanded" x-collapse>
 
-                <!-- 8b. Events -->
-                {#if session.collectedArtifacts.events}
-                <div class="artifact-subsection">
-                    <div class="artifact-header expandable" @click="eventsExpanded = !eventsExpanded">
-                        <span class="artifact-title">⚡ Events</span>
-                        {#if session.collectedArtifacts.events.summary}
-                        <span class="artifact-count-badge">
-                            {session.collectedArtifacts.events.summary.totalRawCount} raw /
-                            {session.collectedArtifacts.events.summary.deduplicatedCount} dedup
-                        </span>
-                        {/if}
-                        <span class="expand-icon small" x-text="eventsExpanded ? '▲' : '▼'">▼</span>
-                    </div>
-                    <div x-show="eventsExpanded" x-collapse>
-                        {#if session.collectedArtifacts.events.rawEvents && !session.collectedArtifacts.events.rawEvents.isEmpty()}
-                        <div class="logs-content artifact-logs">
-                            {#for event in session.collectedArtifacts.events.rawEvents}
-                            <div class="log-entry event-entry {event.type == 'Warning' ? 'event-warning' : 'event-normal'}">
-                                <span class="event-type-badge">{event.type}</span>
-                                <span class="event-reason">{event.reason}</span>
-                                <span class="event-count">×{event.count}</span>
-                                <span class="event-time">{event.lastTimestamp}</span>
-                                <span class="log-text">{event.message}</span>
+                    <!-- 8a. Metrics -->
+                    {#if session.collectedArtifacts.metrics}
+                        <div class="artifact-subsection">
+                            <div class="artifact-header expandable" @click="metricsExpanded = !metricsExpanded">
+                                <span class="artifact-title">📊 Metrics</span>
+                                <span class="expand-icon small" x-text="metricsExpanded ? '▲' : '▼'">▼</span>
                             </div>
-                            {/for}
-                        </div>
-                        {/if}
-                    </div>
-                </div>
-                {/if}
-
-                <!-- 8c. Logs -->
-                {#if session.collectedArtifacts.logs}
-                <div class="artifact-subsection" id="context-logs-section">
-                    <div class="artifact-header">
-                        <span class="artifact-title">📋 Logs</span>
-                        {#if session.collectedArtifacts.logs.summary}
-                        <span class="artifact-count-badge">
-                            {session.collectedArtifacts.logs.summary.totalRawLines} raw /
-                            {session.collectedArtifacts.logs.summary.deduplicatedLineCount} dedup
-                        </span>
-                        <span class="badge-error">{session.collectedArtifacts.logs.summary.errorCount} Errors</span>
-                        <span class="badge-warn">{session.collectedArtifacts.logs.summary.warnCount} Warnings</span>
-                        <span class="badge-info">{session.collectedArtifacts.logs.summary.infoCount} Info</span>
-                        {/if}
-                    </div>
-
-                    <!-- Raw Logs -->
-                    {#if session.collectedArtifacts.logs.rawLines && !session.collectedArtifacts.logs.rawLines.isEmpty()}
-                    <div class="artifact-sub-header expandable" @click="rawLogsExpanded = !rawLogsExpanded">
-                        <span class="artifact-sub-title">Raw Logs ({session.collectedArtifacts.logs.rawLines.size()} lines)</span>
-                        <span class="expand-icon small" x-text="rawLogsExpanded ? '▲' : '▼'">▼</span>
-                    </div>
-                    <div x-show="rawLogsExpanded" x-collapse>
-                        <div class="logs-content artifact-logs raw-logs-box">
-                            {#for line in session.collectedArtifacts.logs.rawLines}
-                            <div class="log-entry raw-log-line">
-                                <span class="log-text">{line}</span>
-                            </div>
-                            {/for}
-                        </div>
-                    </div>
-                    {/if}
-
-                    <!-- Deduplicated Logs -->
-                    {#if session.collectedArtifacts.logs.deduplicatedLines && !session.collectedArtifacts.logs.deduplicatedLines.isEmpty()}
-                    <div class="artifact-sub-header expandable" @click="dedupLogsExpanded = !dedupLogsExpanded">
-                        <span class="artifact-sub-title">Deduplicated Logs ({session.collectedArtifacts.logs.deduplicatedLines.size()} lines)</span>
-                        <span class="expand-icon small" x-text="dedupLogsExpanded ? '▲' : '▼'">▼</span>
-                    </div>
-                    <div x-show="dedupLogsExpanded" x-collapse>
-                        <div class="logs-content artifact-logs raw-logs-box">
-                            {#for line in session.collectedArtifacts.logs.deduplicatedLines}
-                            <div class="log-entry">
-                                <span class="log-text">{line}</span>
-                            </div>
-                            {/for}
-                        </div>
-                    </div>
-                    {/if}
-                </div>
-                {/if}
-
-                <!-- 8d. JFR (optional) -->
-                {#if session.collectedArtifacts.jfr}
-                <div class="artifact-subsection">
-                    <div class="artifact-header expandable" @click="jfrExpanded = !jfrExpanded">
-                        <span class="artifact-title">☕ JFR Analysis</span>
-                        <span class="artifact-count-badge">{session.collectedArtifacts.jfr.rawReportLength} chars</span>
-                        <span class="expand-icon small" x-text="jfrExpanded ? '▲' : '▼'">▼</span>
-                    </div>
-                    <div x-show="jfrExpanded" x-collapse>
-                        <div class="content-box logs-box">
-                            <div class="logs-content">
-                                <div class="log-entry">
-                                    <span class="log-text">{session.collectedArtifacts.jfr.rawReport}</span>
+                            <div x-show="metricsExpanded" x-collapse>
+                                <div class="artifact-grid">
+                                    <div class="artifact-metric">
+                                        <span class="metric-label">Memory Usage</span>
+                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryUsage}</span>
+                                    </div>
+                                    <div class="artifact-metric">
+                                        <span class="metric-label">Memory Limit</span>
+                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryLimit}</span>
+                                    </div>
+                                    <div class="artifact-metric">
+                                        <span class="metric-label">Memory %</span>
+                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryPercent}%</span>
+                                    </div>
+                                    <div class="artifact-metric">
+                                        <span class="metric-label">CPU Usage</span>
+                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuUsage} cores</span>
+                                    </div>
+                                    <div class="artifact-metric">
+                                        <span class="metric-label">CPU Limit</span>
+                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuLimit} cores</span>
+                                    </div>
+                                    <div class="artifact-metric">
+                                        <span class="metric-label">CPU %</span>
+                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuPercent}%</span>
+                                    </div>
+                                </div>
+                                <div class="artifact-summary-box">
+                                    <span class="artifact-summary-label">LLM Summary:</span>
+                                    <span class="artifact-summary-value mono">{session.collectedArtifacts.metrics.summary}</span>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                {/if}
+                    {/if}
 
-            </div>
-        </section>
+                    <!-- 8b. Events -->
+                    {#if session.collectedArtifacts.events}
+                        <div class="artifact-subsection">
+                            <div class="artifact-header expandable" @click="eventsExpanded = !eventsExpanded">
+                                <span class="artifact-title">⚡ Events</span>
+                                {#if session.collectedArtifacts.events.summary}
+                                    <span class="artifact-count-badge">
+                                {session.collectedArtifacts.events.summary.totalRawCount} raw /
+                                {session.collectedArtifacts.events.summary.deduplicatedCount} dedup
+                            </span>
+                                {/if}
+                                <span class="expand-icon small" x-text="eventsExpanded ? '▲' : '▼'">▼</span>
+                            </div>
+                            <div x-show="eventsExpanded" x-collapse>
+                                {#if session.collectedArtifacts.events.rawEvents && !session.collectedArtifacts.events.rawEvents.isEmpty()}
+                                    <div class="logs-content artifact-logs">
+                                        {#for event in session.collectedArtifacts.events.rawEvents}
+                                            <div class="log-entry event-entry {event.type == 'Warning' ? 'event-warning' : 'event-normal'}">
+                                                <span class="event-type-badge">{event.type}</span>
+                                                <span class="event-reason">{event.reason}</span>
+                                                <span class="event-count">×{event.count}</span>
+                                                <span class="event-time">{event.lastTimestamp}</span>
+                                                <span class="log-text">{event.message}</span>
+                                            </div>
+                                        {/for}
+                                    </div>
+                                {/if}
+                            </div>
+                        </div>
+                    {/if}
+
+                    <!-- 8c. Logs -->
+                    {#if session.collectedArtifacts.logs}
+                        <div class="artifact-subsection" id="context-logs-section">
+                            <div class="artifact-header">
+                                <span class="artifact-title">📋 Logs</span>
+                                {#if session.collectedArtifacts.logs.summary}
+                                    <span class="artifact-count-badge">
+                                {session.collectedArtifacts.logs.summary.totalRawLines} raw /
+                                {session.collectedArtifacts.logs.summary.deduplicatedLineCount} dedup
+                            </span>
+                                    <span class="badge-error">{session.collectedArtifacts.logs.summary.errorCount} Errors</span>
+                                    <span class="badge-warn">{session.collectedArtifacts.logs.summary.warnCount} Warnings</span>
+                                    <span class="badge-info">{session.collectedArtifacts.logs.summary.infoCount} Info</span>
+                                {/if}
+                            </div>
+
+                            <!-- Raw Logs -->
+                            {#if session.collectedArtifacts.logs.rawLines && !session.collectedArtifacts.logs.rawLines.isEmpty()}
+                                <div class="artifact-sub-header expandable" @click="rawLogsExpanded = !rawLogsExpanded">
+                                    <span class="artifact-sub-title">Raw Logs ({session.collectedArtifacts.logs.rawLines.size()} lines)</span>
+                                    <span class="expand-icon small" x-text="rawLogsExpanded ? '▲' : '▼'">▼</span>
+                                </div>
+                                <div x-show="rawLogsExpanded" x-collapse>
+                                    <div class="logs-content artifact-logs raw-logs-box">
+                                        {#for line in session.collectedArtifacts.logs.rawLines}
+                                            <div class="log-entry raw-log-line">
+                                                <span class="log-text">{line}</span>
+                                            </div>
+                                        {/for}
+                                    </div>
+                                </div>
+                            {/if}
+
+                            <!-- Deduplicated Logs -->
+                            {#if session.collectedArtifacts.logs.deduplicatedLines && !session.collectedArtifacts.logs.deduplicatedLines.isEmpty()}
+                                <div class="artifact-sub-header expandable" @click="dedupLogsExpanded = !dedupLogsExpanded">
+                                    <span class="artifact-sub-title">Deduplicated Logs ({session.collectedArtifacts.logs.deduplicatedLines.size()} lines)</span>
+                                    <span class="expand-icon small" x-text="dedupLogsExpanded ? '▲' : '▼'">▼</span>
+                                </div>
+                                <div x-show="dedupLogsExpanded" x-collapse>
+                                    <div class="logs-content artifact-logs raw-logs-box">
+                                        {#for line in session.collectedArtifacts.logs.deduplicatedLines}
+                                            <div class="log-entry">
+                                                <span class="log-text">{line}</span>
+                                            </div>
+                                        {/for}
+                                    </div>
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
+
+                    <!-- 8d. JFR (optional) -->
+                    {#if session.collectedArtifacts.jfr}
+                        <div class="artifact-subsection">
+                            <div class="artifact-header expandable" @click="jfrExpanded = !jfrExpanded">
+                                <span class="artifact-title">☕ JFR Analysis</span>
+                                <span class="artifact-count-badge">{session.collectedArtifacts.jfr.rawReportLength} chars</span>
+                                <span class="expand-icon small" x-text="jfrExpanded ? '▲' : '▼'">▼</span>
+                            </div>
+                            <div x-show="jfrExpanded" x-collapse>
+                                <div class="content-box logs-box">
+                                    <div class="logs-content">
+                                        <div class="log-entry">
+                                            <span class="log-text">{session.collectedArtifacts.jfr.rawReport}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {/if}
+
+                </div>
+            </section>
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -603,87 +504,226 @@
                 </div>
             </div>
         </section>
+
     </div>
+    <!-- END tab-panel-analysis -->
 
-    <!-- Chatbot Widget (Floating) -->
-    <!-- Floating toggle button — shown when panel is closed -->
-    <button id="chatbotToggle" class="chatbot-toggle" title="Ask CAUSA AI">
-        <span class="chatbot-toggle-icon">💬</span>
-    </button>
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TAB PANEL: VALIDATION                                           -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-panel-validation" class="tab-panel">
 
-    <!-- Chat Panel — shown when toggle is clicked -->
-    <div id="chatbotWidget" class="chatbot-widget">
-        <div id="chatbotPanel" class="chatbot-panel" style="display: none;">
-            <!-- Chat Header -->
-            <div class="chatbot-header">
-                <div class="chatbot-header-left">
-                    <img src="/logo.png" alt="CAUSA" class="chatbot-logo">
-                    <div>
-                        <div class="chatbot-title">CAUSA AI</div>
-                        <div class="chatbot-subtitle">Root Cause Assistant</div>
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- 5. VALIDATION ANALYSIS                                          -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        {#if session.report && session.report.assertions && !session.report.assertions.isEmpty()}
+            <section class="details-section validation-section">
+
+                <div class="section-header">
+                    <h2 class="section-title"><span>Validation Analysis</span></h2>
+                </div>
+
+                <div class="val-issue-row">
+                    <span class="val-issue-label">Detected Issue</span>
+                    <div class="val-issue-box">{session.report.issue}</div>
+                </div>
+
+                <div class="val-summary-bar">
+                    <div class="val-summary-pills">
+                        <span class="val-pill pill-supported">✔ Supported <span class="pill-count" id="count-supported"></span></span>
+                        <span class="val-pill pill-partial">◑ Partial <span class="pill-count" id="count-partial"></span></span>
+                        <span class="val-pill pill-unsupported">✖ Unsupported <span class="pill-count" id="count-unsupported"></span></span>
                     </div>
+                    <div class="val-confidence-avg">Avg confidence: <strong id="avg-confidence">—</strong></div>
                 </div>
-                <div class="chatbot-header-actions">
-                    <button class="chatbot-change-pod-btn" id="chatbotChangePod" title="Switch pod context" onclick="resetPodContext()" style="display:none;">
-                        🔄 Change Pod
-                    </button>
-                    <button class="chatbot-close" id="chatbotClose" title="Close">✕</button>
+
+                <div class="val-assertions-grid">
+                    {#for a in session.report.assertions}
+                        {#let cardMod=(a.judgmentCall.decision eq 'Supported' ? 'val-card--supported' : (a.judgmentCall.decision eq 'Partially Supported' ? 'val-card--partial' : 'val-card--unsupported'))}
+                            <div class="val-card assertion-card-js {cardMod}"
+                                 data-decision="{a.judgmentCall.decision}"
+                                 data-confidence="{a.judgmentCall.confidence}"
+                                 x-data="{ open: false }">
+
+                                <div class="val-card-top">
+                                    {#if a.judgmentCall.decision eq 'Supported'}
+                                        <span class="val-badge badge--supported">✔ Supported</span>
+                                    {#else if a.judgmentCall.decision eq 'Partially Supported'}
+                                        <span class="val-badge badge--partial">◑ Partially Supported</span>
+                                    {#else}
+                                        <span class="val-badge badge--unsupported">✖ Unsupported</span>
+                                    {/if}
+
+                                    {#if a.judgmentCall.matchType && a.judgmentCall.matchType ne 'none'}
+                                        <span class="val-match-type">
+                                {#if a.judgmentCall.matchType eq 'direct'}🎯 direct
+                                {#else if a.judgmentCall.matchType eq 'indirect'}🔗 indirect
+                                {#else if a.judgmentCall.matchType eq 'partial'}◐ partial
+                                {#else}{a.judgmentCall.matchType}
+                                {/if}
+                            </span>
+                                    {/if}
+                                </div>
+
+                                <div class="val-assertion-text">{a.assertion}</div>
+
+                                <div class="val-confidence-row">
+                                    <span class="val-conf-label">Confidence</span>
+                                    <div class="val-conf-track">
+                                        {#let confMod=(a.judgmentCall.confidence ge 0.7 ? 'conf--high' : (a.judgmentCall.confidence ge 0.4 ? 'conf--mid' : 'conf--low'))}
+                                            <div class="val-conf-fill {confMod}"
+                                                 style="width: {a.judgmentCall.confidencePercent}%">
+                                            </div>
+                                        {/let}
+                                    </div>
+                                    <span class="val-conf-pct">{a.judgmentCall.confidencePercent}%</span>
+                                </div>
+
+                                <div class="val-reasoning">{a.judgmentCall.reasoning}</div>
+
+                                <div class="val-evidence-toggle" @click="open = !open">
+                                    <span>Evidence</span>
+                                    <span class="val-evidence-count">
+                                {#if a.matchedLogs && !a.matchedLogs.isEmpty()}{a.matchedLogs.size()} log{#if a.matchedLogs.size() > 1}s{/if}{#else}none{/if}
+                            </span>
+                                    <span class="val-chevron" x-text="open ? '▲' : '▼'">▼</span>
+                                </div>
+
+                                <div x-show="open" x-transition class="val-evidence-body">
+                                    {#if a.matchedLogs && !a.matchedLogs.isEmpty()}
+                                        {#for log in a.matchedLogs}
+                                            <div class="val-log-line">{log}</div>
+                                        {/for}
+                                    {#else}
+                                        <div class="val-no-evidence">No log evidence extracted for this assertion.</div>
+                                    {/if}
+                                </div>
+
+                                {#if a.modelAnalysisQuestions && !a.modelAnalysisQuestions.isEmpty()}
+                                    <details class="val-questions-details">
+                                        <summary class="val-questions-summary">
+                                            Validation Challenge
+                                            <span class="question-count">
+                                    ({a.modelAnalysisQuestions.size()} questions)
+                                </span>
+                                        </summary>
+                                        <ul class="val-questions-list">
+                                            {#for q in a.modelAnalysisQuestions}
+                                                <li>{q}</li>
+                                            {/for}
+                                        </ul>
+                                    </details>
+                                {/if}
+
+                            </div>
+                        {/let}
+                    {/for}
                 </div>
-            </div>
 
-            <!-- Active Pod Context Bar -->
-            <div class="chatbot-pod-context" id="chatbotPodContext" style="display:none;">
-                <span class="pod-context-icon">🟢</span>
-                <span class="pod-context-label" id="chatbotPodLabel">No pod selected</span>
-            </div>
-
-            <!-- Chat Messages -->
-            <div class="chatbot-messages" id="chatbotMessages">
-                <div class="chat-message bot-message">
-                    <div class="message-bubble">
-                        <p>👋 Hi! I'm the CAUSA AI assistant. I'm already loaded with the analysis for <strong>{session.podName}</strong>. Use the quick actions below or ask me anything about this workload.</p>
+                {#let finalMod=(session.report.finalDecision.status eq 'Supported' ? 'val-final--supported' : (session.report.finalDecision.status eq 'Partially Supported' ? 'val-final--partial' : 'val-final--unsupported'))}
+                    <div class="val-final {finalMod}">
+                        <div class="val-final-left">
+                            <div class="val-final-label">Final Validation Result</div>
+                            <div class="val-final-status">
+                                {#if session.report.finalDecision.status eq 'Supported'}✔
+                                {#else if session.report.finalDecision.status eq 'Partially Supported'}◑
+                                {#else}✖
+                                {/if}
+                                {session.report.finalDecision.status}
+                            </div>
+                        </div>
+                        <div class="val-final-summary">{session.report.finalDecision.summary}</div>
                     </div>
+                {/let}
+
+            </section>
+        {/if}
+
+    </div>
+    <!-- END tab-panel-validation -->
+
+</div>
+
+<!-- Chatbot Widget (Floating) -->
+<!-- Floating toggle button — shown when panel is closed -->
+<button id="chatbotToggle" class="chatbot-toggle" title="Ask CAUSA AI">
+    <span class="chatbot-toggle-icon">💬</span>
+</button>
+
+<!-- Chat Panel — shown when toggle is clicked -->
+<div id="chatbotWidget" class="chatbot-widget">
+    <div id="chatbotPanel" class="chatbot-panel" style="display: none;">
+        <!-- Chat Header -->
+        <div class="chatbot-header">
+            <div class="chatbot-header-left">
+                <img src="/logo.png" alt="CAUSA" class="chatbot-logo">
+                <div>
+                    <div class="chatbot-title">CAUSA AI</div>
+                    <div class="chatbot-subtitle">Root Cause Assistant</div>
                 </div>
             </div>
-
-            <!-- Quick Action Buttons -->
-            <div class="chatbot-quick-actions" id="chatbotQuickActions">
-                <p class="quick-actions-label">Quick Actions for SRE / Dev</p>
-                <div class="quick-actions-grid">
-                    <button class="quick-action-btn" onclick="chatQuickAction('explain-root-cause')" title="Plain-English explanation of what broke and why">
-                        <span class="qa-icon">🔍</span>
-                        <span class="qa-label">Explain Root Cause</span>
-                    </button>
-                    <button class="quick-action-btn" onclick="chatQuickAction('immediate-mitigation')" title="kubectl commands and steps to stabilise the workload right now">
-                        <span class="qa-icon">⚡</span>
-                        <span class="qa-label">Immediate Mitigation</span>
-                    </button>
-                    <button class="quick-action-btn" onclick="chatQuickAction('permanent-fix')" title="Recommended solution to prevent recurrence">
-                        <span class="qa-icon">💡</span>
-                        <span class="qa-label">Recommended Solution</span>
-                    </button>
-                    <button class="quick-action-btn" onclick="chatQuickAction('draft-incident-ticket')" title="Pre-filled incident / JIRA ticket ready to copy-paste">
-                        <span class="qa-icon">📋</span>
-                        <span class="qa-label">Draft Incident Ticket</span>
-                    </button>
-                </div>
+            <div class="chatbot-header-actions">
+                <button class="chatbot-change-pod-btn" id="chatbotChangePod" title="Switch pod context" onclick="resetPodContext()" style="display:none;">
+                    🔄 Change Pod
+                </button>
+                <button class="chatbot-close" id="chatbotClose" title="Close">✕</button>
             </div>
+        </div>
 
-            <!-- Chat Input -->
-            <div class="chatbot-input-area">
-                <div class="chatbot-input-row">
-                    <input type="text" id="chatbotInput" class="chatbot-input"
-                           placeholder="Ask me something..." autocomplete="off"
-                           onkeydown="if(event.key==='Enter') sendChatMessage()">
-                    <button class="chatbot-send-btn" onclick="sendChatMessage()" title="Send">
-                        <span>➤</span>
-                    </button>
+        <!-- Active Pod Context Bar -->
+        <div class="chatbot-pod-context" id="chatbotPodContext" style="display:none;">
+            <span class="pod-context-icon">🟢</span>
+            <span class="pod-context-label" id="chatbotPodLabel">No pod selected</span>
+        </div>
+
+        <!-- Chat Messages -->
+        <div class="chatbot-messages" id="chatbotMessages">
+            <div class="chat-message bot-message">
+                <div class="message-bubble">
+                    <p>👋 Hi! I'm the CAUSA AI assistant. I'm already loaded with the analysis for <strong>{session.podName}</strong>. Use the quick actions below or ask me anything about this workload.</p>
                 </div>
             </div>
         </div>
+
+        <!-- Quick Action Buttons -->
+        <div class="chatbot-quick-actions" id="chatbotQuickActions">
+            <p class="quick-actions-label">Quick Actions for SRE / Dev</p>
+            <div class="quick-actions-grid">
+                <button class="quick-action-btn" onclick="chatQuickAction('explain-root-cause')" title="Plain-English explanation of what broke and why">
+                    <span class="qa-icon">🔍</span>
+                    <span class="qa-label">Explain Root Cause</span>
+                </button>
+                <button class="quick-action-btn" onclick="chatQuickAction('immediate-mitigation')" title="kubectl commands and steps to stabilise the workload right now">
+                    <span class="qa-icon">⚡</span>
+                    <span class="qa-label">Immediate Mitigation</span>
+                </button>
+                <button class="quick-action-btn" onclick="chatQuickAction('permanent-fix')" title="Recommended solution to prevent recurrence">
+                    <span class="qa-icon">💡</span>
+                    <span class="qa-label">Recommended Solution</span>
+                </button>
+                <button class="quick-action-btn" onclick="chatQuickAction('draft-incident-ticket')" title="Pre-filled incident / JIRA ticket ready to copy-paste">
+                    <span class="qa-icon">📋</span>
+                    <span class="qa-label">Draft Incident Ticket</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Chat Input -->
+        <div class="chatbot-input-area">
+            <div class="chatbot-input-row">
+                <input type="text" id="chatbotInput" class="chatbot-input"
+                       placeholder="Ask me something..." autocomplete="off"
+                       onkeydown="if(event.key==='Enter') sendChatMessage()">
+                <button class="chatbot-send-btn" onclick="sendChatMessage()" title="Send">
+                    <span>➤</span>
+                </button>
+            </div>
+        </div>
     </div>
-    <!-- Toast notification for clipboard copy -->
-    <div id="bob-toast" style="
+</div>
+
+<!-- Toast notification for clipboard copy -->
+<div id="bob-toast" style="
         display: none;
         position: fixed;
         bottom: 2rem;
@@ -699,83 +739,93 @@
         animation: fadeInUp 0.2s ease;
     ">✅ Copied to clipboard!</div>
 
-    <script>
-        function viewLogsSection(link) {
-            // Expand the Context Details section if collapsed, then navigate to anchor
-            var contextSection = document.querySelector('.context-details-section');
-            if (contextSection) {
-                var alpineEl = contextSection.closest('[x-data]') || contextSection;
-                if (alpineEl._x_dataStack && alpineEl._x_dataStack[0]) {
-                    alpineEl._x_dataStack[0].contextExpanded = true;
-                }
+<script>
+    /* ── Tab switching ── */
+    function switchPageTab(tab) {
+        document.querySelectorAll('.page-tab-btn').forEach(function(btn) {
+            btn.classList.remove('tab-active');
+        });
+        document.querySelectorAll('.tab-panel').forEach(function(panel) {
+            panel.classList.remove('tab-panel-active');
+        });
+        document.getElementById('tab-btn-' + tab).classList.add('tab-active');
+        document.getElementById('tab-panel-' + tab).classList.add('tab-panel-active');
+    }
+
+    function viewLogsSection(link) {
+        var contextSection = document.querySelector('.context-details-section');
+        if (contextSection) {
+            var alpineEl = contextSection.closest('[x-data]') || contextSection;
+            if (alpineEl._x_dataStack && alpineEl._x_dataStack[0]) {
+                alpineEl._x_dataStack[0].contextExpanded = true;
             }
-            setTimeout(function() {
-                window.location.hash = 'context-logs-section';
-            }, 350);
         }
+        setTimeout(function() {
+            window.location.hash = 'context-logs-section';
+        }, 350);
+    }
 
-        function showBobToast() {
-            var toast = document.getElementById('bob-toast');
-            toast.style.display = 'block';
-            setTimeout(function() { toast.style.display = 'none'; }, 2500);
-        }
+    function showBobToast() {
+        var toast = document.getElementById('bob-toast');
+        toast.style.display = 'block';
+        setTimeout(function() { toast.style.display = 'none'; }, 2500);
+    }
 
-        function copyToClipboard(text) {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(showBobToast).catch(function() {
-                    copyFallback(text);
-                });
-            } else {
+    function copyToClipboard(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(showBobToast).catch(function() {
                 copyFallback(text);
-            }
+            });
+        } else {
+            copyFallback(text);
         }
+    }
 
-        function copyFallback(text) {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            try { document.execCommand('copy'); } catch(e) {}
-            document.body.removeChild(ta);
-            showBobToast();
-        }
+    function copyFallback(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand('copy'); } catch(e) {}
+        document.body.removeChild(ta);
+        showBobToast();
+    }
 
-        function getText(id) {
-            var el = document.getElementById(id);
-            return el ? el.innerText.trim() : '';
-        }
+    function getText(id) {
+        var el = document.getElementById(id);
+        return el ? el.innerText.trim() : '';
+    }
 
-        // Copy a specific section by section key
-        function copySection(sectionKey) {
-            var parts = [];
-            if (sectionKey === 'pod-info-section') {
-                var ns = getText('pod-namespace-text');
-                var pod = getText('pod-name-text');
-                var phase = getText('pod-phase-text');
-                parts.push('## Pod Information');
-                if (ns) parts.push('Namespace: ' + ns);
-                if (pod) parts.push('Pod Name: ' + pod);
-                if (phase) parts.push('Phase: ' + phase);
-            } else if (sectionKey === 'issue-detected-section') {
-                var title = getText('issue-title-text');
-                var desc = getText('issue-description-text');
-                parts.push('## Issue Detected');
-                if (title) parts.push('**' + title + '**');
-                if (desc) parts.push(desc);
-            } else if (sectionKey === 'evidence-section') {
-                var ev = getText('evidence-text');
-                parts.push('## Evidence');
-                if (ev) parts.push(ev);
-            } else if (sectionKey === 'supported-logs-section') {
-                var logs = getText('supported-logs-text');
-                parts.push('## Supported Logs');
-                if (logs) parts.push(logs);
-            }
-            copyToClipboard(parts.join('\n'));
+    function copySection(sectionKey) {
+        var parts = [];
+        if (sectionKey === 'pod-info-section') {
+            var ns = getText('pod-namespace-text');
+            var pod = getText('pod-name-text');
+            var phase = getText('pod-phase-text');
+            parts.push('## Pod Information');
+            if (ns) parts.push('Namespace: ' + ns);
+            if (pod) parts.push('Pod Name: ' + pod);
+            if (phase) parts.push('Phase: ' + phase);
+        } else if (sectionKey === 'issue-detected-section') {
+            var title = getText('issue-title-text');
+            var desc = getText('issue-description-text');
+            parts.push('## Issue Detected');
+            if (title) parts.push('**' + title + '**');
+            if (desc) parts.push(desc);
+        } else if (sectionKey === 'evidence-section') {
+            var ev = getText('evidence-text');
+            parts.push('## Evidence');
+            if (ev) parts.push(ev);
+        } else if (sectionKey === 'supported-logs-section') {
+            var logs = getText('supported-logs-text');
+            parts.push('## Supported Logs');
+            if (logs) parts.push(logs);
         }
+        copyToClipboard(parts.join('\n'));
+    }
 
     function debugWithBob() {
         var parts = [];
@@ -833,7 +883,6 @@
             document.getElementById("avg-confidence").innerText = avg + "%";
         }
 
-        // FIX: populate pill counts that were previously always empty
         var elSupported = document.getElementById("count-supported");
         var elPartial = document.getElementById("count-partial");
         var elUnsupported = document.getElementById("count-unsupported");
