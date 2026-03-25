@@ -290,27 +290,5 @@ public class RcaAnalysisSession extends PanacheMongoEntity {
         return namespace + "/" + podName;
     }
     
-    /**
-     * Returns the confidence score from the report if available.
-     *
-     * @return confidence score (0.0-1.0) or null if not available
-     */
-    public Double getConfidence() {
-        return report != null ? report.validationConfidence : null;
-    }
-    
-    /**
-     * Returns a formatted confidence percentage for display.
-     *
-     * @return formatted confidence (e.g., "95%") or "N/A"
-     */
-    public String getFormattedConfidence() {
-        Double confidence = getConfidence();
-        if (confidence == null) {
-            return "N/A";
-        }
-        return String.format("%.0f%%", confidence * 100);
-    }
-    
 }
 

@@ -1437,6 +1437,21 @@ function appendInlineNodes(parent, text) {
     }
 }
 
+
+function toggleEvidence(btn) {
+
+    const content = btn.parentElement.nextElementSibling;
+
+    if (content.classList.contains("collapsed")) {
+    content.classList.remove("collapsed");
+    btn.innerText = "Collapse";
+} else {
+    content.classList.add("collapsed");
+    btn.innerText = "Expand";
+}
+
+}
+
 /**
  * Parse inline markdown (**bold** and `code`) in a plain-text segment
  * and append the resulting nodes to the given parent element.
@@ -1473,6 +1488,43 @@ function appendStyledText(parent, text) {
         parent.appendChild(document.createTextNode(text.slice(last)));
     }
 }
+
+/**
+ * Validation summary counter — updates pill counts and avg confidence
+ * after Alpine.js (or the DOM) has initialised the assertion cards.
+ *
+ * Place this in your existing dashboard JS file, or include it as a
+ * separate <script> just before </body>.
+ */
+(function () {
+    function updateValidationSummary() {
+        var cards = document.querySelectorAll('.assertion-card-js');
+        if (!cards.length) return;
+
+        var counts = { 'Supported': 0, 'Partially Supported': 0, 'Unsupported': 0 };
+        var totalConf = 0;
+
+        cards.forEach(function (card) {
+            var decision = card.dataset.decision || 'Unsupported';
+            var conf = parseFloat(card.dataset.confidence) || 0;
+            if (counts[decision] !== undefined) counts[decision]++;
+            totalConf += conf;
+        });
+
+        var s   = document.getElementById('count-supported');
+        var p   = document.getElementById('count-partial');
+        var u   = document.getElementById('count-unsupported');
+        var avg = document.getElementById('avg-confidence');
+
+        if (s)   s.textContent   = counts['Supported']           ? '(' + counts['Supported']           + ')' : '';
+        if (p)   p.textContent   = counts['Partially Supported'] ? '(' + counts['Partially Supported'] + ')' : '';
+        if (u)   u.textContent   = counts['Unsupported']         ? '(' + counts['Unsupported']         + ')' : '';
+        if (avg) avg.textContent = Math.round((totalConf / cards.length) * 100) + '%';
+    }
+
+    document.addEventListener('DOMContentLoaded',    updateValidationSummary);
+    document.addEventListener('alpine:initialized',  updateValidationSummary);
+})();
 
 // Expose to global scope for inline onclick handlers
 window.sendChatMessage  = sendChatMessage;

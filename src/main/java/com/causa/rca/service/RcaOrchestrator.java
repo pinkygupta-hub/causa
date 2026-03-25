@@ -1,64 +1,41 @@
 package com.causa.rca.service;
 
+import com.causa.rca.ai.*;
+import com.causa.rca.model.RcaReport;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
+
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.context.control.ActivateRequestContext;
 import jakarta.inject.Inject;
+
 import org.jboss.logging.Logger;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.context.ManagedExecutor;
 
-import com.causa.rca.ai.AnomalyDetector;
-import com.causa.rca.ai.RootCauseAnalyst;
-import com.causa.rca.ai.ValidationAgent;
-import com.causa.rca.model.RcaReport;
 import com.causa.rca.model.RcaAnalysisSession;
 import com.causa.rca.model.AnalysisStatus;
 import com.causa.rca.model.artifact.CollectedArtifacts;
 
-/**
- * Orchestrator service that coordinates the complete RCA (Root Cause Analysis) pipeline.
- *
- * <h3>Pipeline steps</h3>
- * <ol>
- *   <li><b>Data Collection</b> – {@link DataCollectorService#collectArtifacts} gathers all
- *       diagnostic data and packages it into a {@link CollectedArtifacts} object.</li>
- *   <li><b>Anomaly Detection</b> – {@link AnomalyDetector} receives only the LLM-safe
- *       context string ({@link CollectedArtifacts#toLlmContext()}).</li>
- *   <li><b>Root Cause Analysis</b> – {@link RootCauseAnalyst} receives the same compact
- *       context plus the detected anomaly type.</li>
- *   <li><b>Validation & Formatting</b> – {@link ValidationAgent} receives the RCA output
- *       and the compact context to produce a structured {@link RcaReport}.</li>
- * </ol>
- *
- * <h3>LLM data contract</h3>
- * LLM services receive <b>only</b> {@link CollectedArtifacts#toLlmContext()} — a compact
- * string built from summaries.  Raw logs, raw events, and full JFR reports are
- * <b>never</b> passed to LLMs.
- *
- * @see DataCollectorService
- * @see AnomalyDetector
- * @see RootCauseAnalyst
- * @see ValidationAgent
- * @see CollectedArtifacts
- */
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 @ApplicationScoped
 public class RcaOrchestrator {
 
     private static final Logger LOG = Logger.getLogger(RcaOrchestrator.class);
 
-    @Inject
-    DataCollectorService dataCollector;
-
-    @Inject
-    AnomalyDetector anomalyDetector;
-
-    @Inject
-    RootCauseAnalyst rootCauseAnalyst;
-
-    @Inject
-    ValidationAgent reportValidator;
-
-    @Inject
-    AnalysisTrackingService trackingService;
+    @Inject DataCollectorService dataCollector;
+    @Inject AnomalyDetector anomalyDetector;
+    @Inject RcaAssertionExtractor rcaAssertionExtractor;
+    @Inject EvidenceMatcherAgent evidenceMatcher;
+    @Inject AssertionValidatorAgent assertionValidator;
+    @Inject RootCauseAnalyst rootCauseAnalyst;
+    @Inject AnalysisTrackingService trackingService;
 
     @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
     String detectorModel;
@@ -66,228 +43,377 @@ public class RcaOrchestrator {
     @ConfigProperty(name = "quarkus.langchain4j.ollama.rca.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
     String rcaModel;
 
-    @ConfigProperty(name = "quarkus.langchain4j.ollama.validator.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
-    String validatorModel;
-
     @ConfigProperty(name = "quarkus.langchain4j.ollama.base-url",
             defaultValue = "http://ollama.default.svc.cluster.local:11434")
     String ollamaBaseUrl;
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Public API
-    // ─────────────────────────────────────────────────────────────────────────
+    @Inject ManagedExecutor executor;
+    ManagedContext requestContext = Arc.container().requestContext();
 
-    /**
-     * Starts an asynchronous RCA analysis pipeline for a specific pod.
-     * Returns immediately with the created session; analysis runs in a background thread.
-     *
-     * @param namespace the Kubernetes namespace
-     * @param podName   the pod name
-     * @return the created {@link RcaAnalysisSession} with status {@code IN_PROGRESS}
-     */
     public RcaAnalysisSession startAnalysis(String namespace, String podName) {
+
         LOG.info("Starting async RCA analysis for: " + namespace + "/" + podName);
 
         RcaAnalysisSession session = trackingService.createSession(namespace, podName);
         String sessionId = session.sessionId;
 
-        // Run analysis asynchronously in a background thread
-        new Thread(() -> {
+        executor.runAsync(() -> {
+            requestContext.activate();
             try {
                 runAnalysisInternal(sessionId, namespace, podName);
             } catch (Exception e) {
                 LOG.error("Error in async analysis for session " + sessionId, e);
+            } finally {
+                requestContext.terminate();
             }
-        }).start();
+        });
 
         return session;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Internal pipeline
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Executes the full RCA pipeline synchronously.
-     * {@code @ActivateRequestContext} ensures RequestScoped beans work in the async thread.
-     */
-    @ActivateRequestContext
     void runAnalysisInternal(String sessionId, String namespace, String podName) {
+
         try {
 
-            // ── Step 0: Data Collection ───────────────────────────────────────
             trackingService.recordStageStart(sessionId, "data_collection");
             trackingService.updateStatus(sessionId, AnalysisStatus.COLLECTING_DATA,
                     "Collecting metrics, logs, and events from Kubernetes");
 
             CollectedArtifacts artifacts = dataCollector.collectArtifacts(namespace, podName);
-
-            // The compact LLM context – summaries only, never raw data
             String llmContext = artifacts.toLlmContext();
 
-            LOG.info("Data collection complete for " + podName
-                    + " | tokens=" + artifacts.tokenCount
-                    + " | truncated=" + artifacts.truncationApplied
-                    + " | llmContextLength=" + llmContext.length());
-            LOG.debug("LLM context:\n" + llmContext);
-
-            // Persist full artifacts to MongoDB so UX can display raw evidence
             trackingService.storeArtifacts(sessionId, artifacts);
-
             trackingService.recordStageEnd(sessionId, "data_collection");
 
-            // ── Step 1: Anomaly Detection ─────────────────────────────────────
+            ObjectMapper mapper = new ObjectMapper();
+
             trackingService.recordStageStart(sessionId, "anomaly_detection");
             trackingService.updateStatus(sessionId, AnalysisStatus.DETECTING_ANOMALY,
                     "Analyzing data to detect anomalies using AI");
 
-            LOG.info("Step 1: Anomaly Detection with model: " + detectorModel);
-
-            String rawAnomaly;
-            try {
-                // LLM receives ONLY the compact summary context
-                rawAnomaly = anomalyDetector.detectAnomaly(llmContext);
-                LOG.info("RAW Anomaly Detector Response: [" + rawAnomaly + "]");
-            } catch (Exception e) {
-                String errorMsg = buildModelErrorMessage("anomaly detection", detectorModel, e);
-                LOG.error(errorMsg, e);
-                throw new RuntimeException(errorMsg, e);
-            }
-
-            // Parse anomaly type token from raw response.
-            // Handles both clean single-token responses ("OOM_KILLED") and
-            // verbose responses like "ANAMOLY_TYPE: OTHERS" or "ANOMALY_TYPE: HEALTHY"
+            String rawAnomaly = anomalyDetector.detectAnomaly(llmContext);
             String anomalyType = parseAnomalyType(rawAnomaly);
-            LOG.info("Sanitized Anomaly Type: [" + anomalyType + "]");
+
             trackingService.recordStageEnd(sessionId, "anomaly_detection");
 
-            if (anomalyType.isEmpty()
-                    || "HEALTHY".equalsIgnoreCase(anomalyType)
-                    || anomalyType.toUpperCase().contains("HEALTHY")) {
-                LOG.info("System is healthy – skipping RCA and Validation.");
+            if ("HEALTHY".equalsIgnoreCase(anomalyType)) {
+
                 RcaReport healthyReport = new RcaReport(
-                        "System Healthy", "No anomaly detected",
-                        "Metrics within normal range", null,
-                        1.0);
+                        "System Healthy",
+                        "No anomaly detected",
+                        "Metrics within normal range",
+                        null,null,null,null);
+
                 trackingService.markHealthy(sessionId, healthyReport);
                 return;
             }
 
-            // ── Step 2: Root Cause Analysis ───────────────────────────────────
             trackingService.recordStageStart(sessionId, "rca_analysis");
-            trackingService.updateStatus(sessionId, AnalysisStatus.ANALYZING_RCA,
-                    "Performing root cause analysis for: " + anomalyType);
 
-            LOG.info("Step 2: Root Cause Analysis with model: " + rcaModel);
+            String rcaOutput =
+                    rootCauseAnalyst.analyzeRootCause(anomalyType, llmContext);
+            LOG.info("rca output from  rootCauseAnalyst " +  rcaOutput);
 
-            String rcaOutput;
-            try {
-                // LLM receives ONLY the compact summary context
-                rcaOutput = rootCauseAnalyst.analyzeRootCause(anomalyType, llmContext);
-                LOG.info("RAW RCA Result: [" + rcaOutput + "]");
-            } catch (Exception e) {
-                String errorMsg = buildModelErrorMessage("root cause analysis", rcaModel, e);
-                LOG.error(errorMsg, e);
-                throw new RuntimeException(errorMsg, e);
-            }
             trackingService.recordStageEnd(sessionId, "rca_analysis");
 
-            // ── Step 3: Validation & Formatting ──────────────────────────────
             trackingService.recordStageStart(sessionId, "validation");
-            trackingService.updateStatus(sessionId, AnalysisStatus.VALIDATING,
-                    "Validating and formatting analysis results");
 
-            LOG.info("Step 3: Validation with model: " + validatorModel);
+            String rcaSection = extractRootCause(rcaOutput);
+            LOG.info("rca section sent as input to assertion extractor " +  rcaSection);
+            String extractionRaw = rcaAssertionExtractor.extract(rcaSection);
+            LOG.info("assertions output " +extractionRaw);
 
-            RcaReport report;
-            try {
-                // LLM receives ONLY the compact summary context (not raw logs/events)
-                report = reportValidator.validateAndFormat(rcaOutput, llmContext);
-                LOG.info("Final Report: " + report);
-            } catch (Exception e) {
-                String errorMsg = buildModelErrorMessage("validation", validatorModel, e);
-                LOG.error(errorMsg, e);
-                throw new RuntimeException(errorMsg, e);
+            JsonNode extractionNode =
+                    safeParseValidatorOutput(extractionRaw, mapper);
+
+            String issue =
+                    extractionNode.path("issueIdentified")
+                            .asText("Unknown Issue");
+
+            ArrayNode assertionsNode =
+                    (ArrayNode) extractionNode.get("assertions");
+
+            String logsContext = llmContext;
+
+            List<Map<String, Object>> finalAssertions = new ArrayList<>();
+            int weightedScore = 0;
+
+            for (JsonNode assertionNode : assertionsNode) {
+
+                String assertion = assertionNode.asText();
+
+                LOG.info("evidence i/p for assertion " + assertion + " - logs - " + logsContext);
+
+
+                String evidenceRaw =
+                        evidenceMatcher.match(assertion, logsContext);
+
+                LOG.info(" evidenceRaw o/p " + evidenceRaw + " for assertion " + assertion + "logs " + logsContext);
+
+                JsonNode evidenceNode =
+                        safeParseValidatorOutput(evidenceRaw, mapper);
+
+                List<String> matchedLogs = new ArrayList<>();
+
+                if (evidenceNode.has("matchedLogs")) {
+
+                    for (JsonNode log : evidenceNode.get("matchedLogs")) {
+
+                        String l;
+
+                        if (log.isTextual()) {
+                            l = log.asText();
+                        } else if (log.has("text")) {
+                            l = log.get("text").asText();
+                        } else {
+                            continue;
+                        }
+
+                        if (l.length() < 400) {
+                            matchedLogs.add(l);
+                        }
+
+                        if (matchedLogs.size() >= 3) break;
+                    }
+                }
+                LOG.info("sending to validator assertion" + assertion + " matched Logs: " + matchedLogs);
+                String validationRaw =
+                        assertionValidator.validate(
+                                assertion,
+                                String.join("\n", matchedLogs));
+
+
+                LOG.info("validation o/p from validator : " + validationRaw);
+                JsonNode validationNode =
+                        safeParseValidatorOutput(validationRaw, mapper);
+
+                List<String> modelChecks = new ArrayList<>();
+
+                if (validationNode.has("modelAnalysisQuestions")) {
+
+                    for (JsonNode q :
+                            validationNode.get("modelAnalysisQuestions")) {
+
+                        modelChecks.add(q.asText());
+
+                        if (modelChecks.size() >= 3) break;
+                    }
+                }
+
+                String judgement =
+                        validationNode.path("judgementCall")
+                                .asText("Unsupported");
+
+                String matchType =
+                        validationNode.path("matchType")
+                                .asText("none");
+
+                double confidence =
+                        validationNode.path("confidence")
+                                .asDouble(0.3);
+
+                String reasoning =
+                        validationNode.path("reasoning")
+                                .asText("");
+
+                Map<String, Object> judgmentCall =
+                        new LinkedHashMap<>();
+
+                judgmentCall.put("decision", judgement);
+                judgmentCall.put("matchType", matchType);
+                judgmentCall.put("confidence", confidence);
+                judgmentCall.put("reasoning", reasoning);
+
+                Map<String, Object> assertionBlock =
+                        new LinkedHashMap<>();
+
+                assertionBlock.put("assertion", assertion);
+                assertionBlock.put("matchedLogs", matchedLogs);
+                assertionBlock.put("modelAnalysisQuestions", modelChecks);
+                assertionBlock.put("judgmentCall", judgmentCall);
+
+                finalAssertions.add(assertionBlock);
+
+                if ("Supported".equals(judgement)) {
+                    weightedScore += 2;
+                } else if ("Partially Supported".equals(judgement)) {
+                    weightedScore += 1;
+                }
             }
-            trackingService.recordStageEnd(sessionId, "validation");
+
+            Set<String> evidenceSet = new LinkedHashSet<>();
+
+            for (Map<String, Object> a : finalAssertions) {
+                evidenceSet.addAll((List<String>) a.get("matchedLogs"));
+            }
+
+            List<String> supportedLogs =
+                    new ArrayList<>(evidenceSet);
+
+            String evidence =
+                    supportedLogs.isEmpty()
+                            ? "No explicit log evidence extracted"
+                            : String.join("\n", supportedLogs);
+
+            double ratio =
+                    (double) weightedScore /
+                            (finalAssertions.size() * 2);
+
+            String finalStatus =
+                    ratio >= 0.65 ? "Supported"
+                            : ratio >= 0.30 ? "Partially Supported"
+                            : "Unsupported";
+
+            Map<String, Object> finalDecision =
+                    Map.of(
+                            "status", finalStatus,
+                            "summary",
+                            "Assertions validated independently and aggregated deterministically."
+                    );
+
+            Map<String, Object> finalReport =
+                    new LinkedHashMap<>();
+
+            finalReport.put("title", "RCA Validation Report");
+            finalReport.put("issue", issue);
+            finalReport.put("evidence", evidence);
+            finalReport.put("supportedLogs", supportedLogs);
+            finalReport.put("assertions", finalAssertions);
+            finalReport.put("finalDecision", finalDecision);
+
+            String finalJson =
+                    mapper.writerWithDefaultPrettyPrinter()
+                            .writeValueAsString(finalReport);
+
+            RcaReport report =
+                    mapper.readValue(finalJson, RcaReport.class);
 
             trackingService.completeSession(sessionId, report);
 
         } catch (Exception e) {
-            LOG.error("Error during RCA analysis for session " + sessionId, e);
+
+            LOG.error(
+                    "Error during RCA analysis for session "
+                            + sessionId,
+                    e
+            );
+
             trackingService.failSession(sessionId, e.getMessage());
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────────
+    private String extractLogs(String context) {
 
-    /**
-     * Parses the anomaly type token from the raw LLM response.
-     * <p>
-     * Handles both clean single-token responses (e.g. {@code "OOM_KILLED"}) and
-     * verbose responses where the model prefixes the token with a label, e.g.:
-     * <ul>
-     *   <li>{@code "ANAMOLY_TYPE: OTHERS"}</li>
-     *   <li>{@code "ANOMALY_TYPE: HEALTHY"}</li>
-     *   <li>{@code "ANOMALY: CPU_THROTTLING"}</li>
-     * </ul>
-     * The valid token set is: OOM_KILLED, GC_PAUSE, CPU_THROTTLING, CRASH_LOOP,
-     * IMAGE_PULL_BACKOFF, HEALTHY, OTHERS.
-     *
-     * @param raw the raw string returned by the anomaly detector LLM
-     * @return the extracted anomaly type token in uppercase, or {@code "OTHERS"} if unparseable
-     */
-    private String parseAnomalyType(String raw) {
+        StringBuilder logs = new StringBuilder();
+
+        for (String line : context.split("\n")) {
+
+            String lower = line.toLowerCase();
+
+            if (lower.contains("oom")
+                    || lower.contains("killed")
+                    || lower.contains("crashloop")
+                    || lower.contains("backoff")
+                    || lower.contains("error")
+                    || lower.contains("failed")) {
+
+                logs.append(line).append("\n");
+            }
+        }
+
+        return logs.toString();
+    }
+
+    private JsonNode safeParseValidatorOutput(
+            String raw,
+            ObjectMapper mapper
+    ) throws Exception {
+
         if (raw == null || raw.isBlank()) {
-            return "OTHERS";
+
+            Map<String,Object> fallback = new HashMap<>();
+            fallback.put("matchedLogs", List.of());
+            fallback.put("matchType","none");
+            fallback.put("modelAnalysisQuestions", List.of());
+            fallback.put("judgementCall","Unsupported");
+            fallback.put("confidence",0.2);
+            fallback.put("reasoning","Model returned empty response");
+
+            return mapper.valueToTree(fallback);
         }
 
-        // Valid tokens (including common misspelling "ANAMOLY")
-        java.util.Set<String> validTokens = java.util.Set.of(
-                "OOM_KILLED", "GC_PAUSE", "CPU_THROTTLING", "CRASH_LOOP",
-                "IMAGE_PULL_BACKOFF", "HEALTHY", "OTHERS");
+        raw = raw.replace("```json","")
+                .replace("```","")
+                .trim();
 
-        // 1. Check if the response contains "KEY: VALUE" pattern (e.g. "ANAMOLY_TYPE: OTHERS")
-        //    Search all lines for a colon-separated value that matches a valid token
-        for (String line : raw.split("\n")) {
-            if (line.contains(":")) {
-                String value = line.substring(line.indexOf(':') + 1).split("#")[0].trim().toUpperCase();
-                if (validTokens.contains(value)) {
-                    return value;
-                }
+        int start = raw.indexOf("{");
+        int end = raw.lastIndexOf("}");
+
+        // ✅ If JSON exists
+        if(start != -1 && end != -1 && end > start){
+
+            String json = raw.substring(start, end + 1);
+
+            json = json
+                    .replaceAll(",\\s*]","]")
+                    .replaceAll(",\\s*}","}")
+                    .replaceAll("\\\\n"," ")
+                    .trim();
+
+            try {
+                return mapper.readTree(json);
+            }
+            catch(Exception e){
+                LOG.warn("Invalid JSON from model, falling back:\n"+raw);
             }
         }
 
-        // 2. Scan each line for a standalone valid token
-        for (String line : raw.split("\n")) {
-            String candidate = line.split("#")[0].trim().toUpperCase();
-            if (validTokens.contains(candidate)) {
-                return candidate;
-            }
-        }
+        // ✅ Fallback when model returned text
+        LOG.warn("Model returned non-JSON output:\n" + raw);
 
-        // 3. Scan word-by-word across the entire response
-        for (String word : raw.toUpperCase().split("[\\s,.:;\\[\\]()]+")) {
-            if (validTokens.contains(word)) {
+        Map<String,Object> fallback = new HashMap<>();
+        fallback.put("matchedLogs", List.of());
+        fallback.put("matchType","none");
+        fallback.put("modelAnalysisQuestions", List.of());
+        fallback.put("judgementCall","Unsupported");
+        fallback.put("confidence",0.2);
+        fallback.put("reasoning", raw);
+
+        return mapper.valueToTree(fallback);
+    }
+
+    private String parseAnomalyType(String raw) {
+
+        if (raw == null) return "OTHERS";
+
+        for (String word : raw.toUpperCase().split("[\\s:]+")) {
+
+            if (word.equals("OOM_KILLED")
+                    || word.equals("GC_PAUSE")
+                    || word.equals("CPU_THROTTLING")
+                    || word.equals("CRASH_LOOP")
+                    || word.equals("IMAGE_PULL_BACKOFF")
+                    || word.equals("HEALTHY")) {
+
                 return word;
             }
         }
 
-        // 4. Fallback: return first non-empty line token, uppercased
-        String firstLine = raw.split("\n")[0].split("#")[0].trim().toUpperCase();
-        return firstLine.isEmpty() ? "OTHERS" : firstLine;
+        return "OTHERS";
     }
 
-    private String buildModelErrorMessage(String stage, String model, Exception cause) {
-        return String.format(
-                "Failed to perform %s using model '%s' at %s. "
-                + "Ensure the model is available: "
-                + "kubectl exec -it <ollama-pod> -- ollama pull %s. "
-                + "Cause: %s",
-                stage, model, ollamaBaseUrl, model, cause.getMessage());
+    private String extractRootCause(String rcaOutput) {
+
+        Pattern pattern = Pattern.compile(
+                "(?i)ROOT[_ ]CAUSE\\s*:\\s*(.*?)(KEY[_ ]EVIDENCE|SUPPORTED LOGS|RECOMMENDATIONS|$)",
+                Pattern.DOTALL);
+
+        Matcher matcher = pattern.matcher(rcaOutput);
+
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+
+        return rcaOutput.trim();
     }
 }
-
-// Made with Bob
