@@ -91,7 +91,8 @@ public class RcaOrchestrator {
             trackingService.updateStatus(sessionId, AnalysisStatus.DETECTING_ANOMALY,
                     "Analyzing data to detect anomalies using AI");
 
-            String rawAnomaly = anomalyDetector.detectAnomaly(llmContext);
+            String anamolyContext = artifacts.toAnamolyLLMContext();
+            String rawAnomaly = anomalyDetector.detectAnomaly(anamolyContext);
             String anomalyType = parseAnomalyType(rawAnomaly);
 
             trackingService.recordStageEnd(sessionId, "anomaly_detection");

@@ -38,6 +38,12 @@ public class LogArtifact {
      */
     public List<String> deduplicatedLines = new ArrayList<>();
 
+    /**
+     * Summarized log lines generated from raw logs.
+     * Provides a condensed view of the logs for analysis.
+     */
+    public List<String> summarizedLogs = new ArrayList<>();
+
     // ── Raw data for UX ───────────────────────────────────────────────────────
 
     /**
@@ -47,6 +53,42 @@ public class LogArtifact {
     public List<String> rawLines = new ArrayList<>();
 
     public LogArtifact() {
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Getters and Setters
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public List<String> getSummarizedLogs() {
+        return summarizedLogs;
+    }
+
+    public void setSummarizedLogs(List<String> summarizedLogs) {
+        this.summarizedLogs = summarizedLogs;
+    }
+
+    public List<String> getDeduplicatedLines() {
+        return deduplicatedLines;
+    }
+
+    public void setDeduplicatedLines(List<String> deduplicatedLines) {
+        this.deduplicatedLines = deduplicatedLines;
+    }
+
+    public List<String> getRawLines() {
+        return rawLines;
+    }
+
+    public void setRawLines(List<String> rawLines) {
+        this.rawLines = rawLines;
+    }
+
+    public LogSummary getSummary() {
+        return summary;
+    }
+
+    public void setSummary(LogSummary summary) {
+        this.summary = summary;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
