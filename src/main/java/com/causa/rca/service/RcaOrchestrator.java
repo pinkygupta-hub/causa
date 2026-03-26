@@ -98,6 +98,9 @@ public class RcaOrchestrator {
             String rawAnomaly = anomalyDetector.detectAnomaly(anamolyContext);
             String anomalyType = parseAnomalyType(rawAnomaly);
 
+            LOG.info("Anomaly type: " + anomalyType);
+            LOG.info("RAW Response: " + rawAnomaly);
+
             // Store anomaly type in session for UI display
             trackingService.updateAnomalyType(sessionId, anomalyType);
             highLevelIssue = rawAnomaly;
@@ -109,8 +112,13 @@ public class RcaOrchestrator {
                 RcaReport healthyReport = new RcaReport(
                         "System Healthy",
                         "No anomaly detected",
+                        null, // highLevelIssue
+                        null, // subLevelIssue
                         "Metrics within normal range",
-                        null,null,null,null);
+                        null, // supportedLogs
+                        null, // assertions
+                        null, // validationChecks
+                        null); // finalDecision
 
                 trackingService.markHealthy(sessionId, healthyReport);
                 return;
@@ -123,6 +131,9 @@ public class RcaOrchestrator {
                 String summarizedLogsContext = artifacts.toSummarizedLogsContext();
                 String gcDetectionRaw = gcPauseDetector.detectGcPause(summarizedLogsContext);
                 String gcAnomalyType = parseGcAnomalyType(gcDetectionRaw);
+
+                LOG.info("Second-stage GC detection result: " + gcAnomalyType);
+                LOG.info("RAW GC Response: " + rawAnomaly);
 
                 subLevelIssue = gcDetectionRaw;
 
@@ -307,9 +318,9 @@ public class RcaOrchestrator {
 
             finalReport.put("title", extractRootCauseTitle(rcaOutput));
             if (null != highLevelIssue)
-                finalReport.put("highLevelIssues", highLevelIssue);
+                finalReport.put("highLevelIssue", highLevelIssue);
             if (null != subLevelIssue)
-                finalReport.put("subLevelIssues", subLevelIssue);
+                finalReport.put("subLevelIssue", subLevelIssue);
             finalReport.put("issue", issue);
             finalReport.put("evidence", evidence);
             finalReport.put("supportedLogs", supportedLogs);
@@ -422,17 +433,35 @@ public class RcaOrchestrator {
 
         if (raw == null) return "OTHERS";
 
-        for (String word : raw.toUpperCase().split("[\\s:]+")) {
+        // Define priority order (highest to lowest)
+        String[] priorityOrder = {
+            "HIGH_MEMORY",
+            "GC_PAUSE",
+            "OOM_KILLED",
+            "CPU_THROTTLING",
+            "CRASH_LOOP",
+            "IMAGE_PULL_BACKOFF",
+            "HEALTHY"
+        };
 
-            if (word.equals("OOM_KILLED")
-                    || word.equals("HIGH_MEMORY")
+        // Collect all matching anomaly types
+        Set<String> foundAnomalies = new HashSet<>();
+        for (String word : raw.toUpperCase().split("[\\s:]+")) {
+            if (word.equals("HIGH_MEMORY")
                     || word.equals("GC_PAUSE")
+                    || word.equals("OOM_KILLED")
                     || word.equals("CPU_THROTTLING")
                     || word.equals("CRASH_LOOP")
                     || word.equals("IMAGE_PULL_BACKOFF")
                     || word.equals("HEALTHY")) {
+                foundAnomalies.add(word);
+            }
+        }
 
-                return word;
+        // Return the highest priority anomaly found
+        for (String anomaly : priorityOrder) {
+            if (foundAnomalies.contains(anomaly)) {
+                return anomaly;
             }
         }
 

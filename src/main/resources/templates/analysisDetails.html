@@ -123,29 +123,7 @@
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- ROOT CAUSE ANALYSIS (First in Overview)                         -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        {#if session.report}
-            <!-- Hidden data for clipboard copy -->
-            <div id="issue-title-text" style="display:none;">{session.report.title}</div>
-            <div id="issue-description-text" style="display:none;">{session.report.issue}</div>
-
-            <section class="details-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <span>Root Cause Analysis</span>
-                        <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Root Cause Analysis">📋</button>
-                    </h2>
-                </div>
-                <div class="content-box issue-highlight">
-                    <h3 class="issue-title">{session.report.title}</h3>
-                    <div class="issue-description">{session.report.issue}</div>
-                </div>
-            </section>
-        {/if}
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- POD INFORMATION                                                 -->
+        <!-- POD INFORMATION (First in Overview)                             -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- Hidden data for Pod Information clipboard copy -->
         <div id="pod-namespace-text" style="display:none;">{session.namespace}</div>
@@ -196,6 +174,49 @@
                 {/if}
             </div>
         </section>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- ROOT CAUSE ANALYSIS (After Pod Information)                     -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        {#if session.report}
+            <!-- Hidden data for clipboard copy -->
+            <div id="issue-title-text" style="display:none;">{session.report.title}</div>
+            <div id="issue-description-text" style="display:none;">{session.report.issue}</div>
+            {#if session.report.highLevelIssue}
+                <div id="high-level-issue-text" style="display:none;">{session.report.highLevelIssue}</div>
+            {/if}
+            {#if session.report.subLevelIssue}
+                <div id="sub-level-issue-text" style="display:none;">{session.report.subLevelIssue}</div>
+            {/if}
+
+            <section class="details-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span>Root Cause Analysis</span>
+                        <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Root Cause Analysis">📋</button>
+                    </h2>
+                </div>
+                <div class="content-box issue-highlight">
+                    <h3 class="issue-title">{session.report.title}</h3>
+                    
+                    {#if session.report.highLevelIssue}
+                        <div class="issue-level-section">
+                            <h4 class="issue-level-title">High-Level Issue</h4>
+                            <div class="issue-level-description">{session.report.highLevelIssue}</div>
+                        </div>
+                    {/if}
+                    
+                    {#if session.report.subLevelIssue}
+                        <div class="issue-level-section">
+                            <h4 class="issue-level-title">Sub-Level Issue</h4>
+                            <div class="issue-level-description">{session.report.subLevelIssue}</div>
+                        </div>
+                    {/if}
+                    
+                    <div class="issue-description">{session.report.issue}</div>
+                </div>
+            </section>
+        {/if}
 
     </div>
     <!-- END tab-panel-overview -->
