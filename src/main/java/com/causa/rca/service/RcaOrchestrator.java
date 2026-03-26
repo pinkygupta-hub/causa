@@ -36,6 +36,7 @@ public class RcaOrchestrator {
     @Inject AssertionValidatorAgent assertionValidator;
     @Inject RootCauseAnalyst rootCauseAnalyst;
     @Inject AnalysisTrackingService trackingService;
+    @Inject GcPauseDetector gcPauseDetector;
 
     @ConfigProperty(name = "quarkus.langchain4j.ollama.detector.chat-model.model-id", defaultValue = "llama2:7b-chat-q8_0")
     String detectorModel;
@@ -113,13 +114,26 @@ public class RcaOrchestrator {
                 return;
             }
 
-            trackingService.recordStageStart(sessionId, "memory_analysis");
-            // TODO: BHARATH WILL ADD MEMORY ANALYSIS LOGIC HERE
-            trackingService.updateStatus(sessionId, AnalysisStatus.MEMORY_ANALYSIS,
-                    "Memory pressure detected, analyzing memory usage and collecting GC logs");
+            // Call LLM again if the anomaly is HIGH_MEMORY
+            if ("HIGH_MEMORY".equalsIgnoreCase(anomalyType)) {
+                LOG.info("HIGH_MEMORY detected, performing second-stage GC pause detection...");
+                trackingService.recordStageStart(sessionId, "memory_analysis");
+                String summarizedLogsContext = artifacts.toSummarizedLogsContext();
+                String gcDetectionRaw = gcPauseDetector.detectGcPause(summarizedLogsContext);
+                String gcAnomalyType = parseGcAnomalyType(gcDetectionRaw);
 
-            trackingService.recordStageEnd(sessionId, "memory_analysis");
+                LOG.info("Second-stage GC detection result: " + gcAnomalyType);
 
+                if ("GC_PAUSE".equalsIgnoreCase(gcAnomalyType)) {
+                    anomalyType = "GC_PAUSE";
+                    trackingService.updateStatus(sessionId, AnalysisStatus.MEMORY_ANALYSIS,
+                            "Memory pressure detected, analyzing memory usage and collecting GC logs");
+                } else {
+                    // Keep as HIGH_MEMORY or downgrade to OTHERS
+                    anomalyType = "OTHERS";
+                }
+                trackingService.recordStageEnd(sessionId, "memory_analysis");
+            }
 
             trackingService.recordStageStart(sessionId, "rca_analysis");
 
@@ -402,6 +416,7 @@ public class RcaOrchestrator {
         for (String word : raw.toUpperCase().split("[\\s:]+")) {
 
             if (word.equals("OOM_KILLED")
+                    || word.equals("HIGH_MEMORY")
                     || word.equals("GC_PAUSE")
                     || word.equals("CPU_THROTTLING")
                     || word.equals("CRASH_LOOP")
@@ -443,5 +458,24 @@ public class RcaOrchestrator {
         }
 
         return rcaOutput.trim();
+    }
+
+    /**
+     * Parses the GC pause detection response.
+     * Extracts GC_PAUSE or NO_GC_ISSUE from the LLM output.
+     */
+    private String parseGcAnomalyType(String raw) {
+        if (raw == null) return "NO_GC_ISSUE";
+        
+        for (String word : raw.toUpperCase().split("[\\s:]+")) {
+            if (word.equals("GC_PAUSE")) {
+                return "GC_PAUSE";
+            }
+            if (word.equals("NO_GC_ISSUE")) {
+                return "NO_GC_ISSUE";
+            }
+        }
+        
+        return "NO_GC_ISSUE";
     }
 }
