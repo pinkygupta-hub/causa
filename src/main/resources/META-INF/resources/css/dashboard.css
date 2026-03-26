@@ -55,6 +55,9 @@
 
     /* Header Height */
     --header-height: 80px;
+    
+    /* Tab Heights */
+    --tab-nav-height: 60px;
 }
 
 /* Reset & Base Styles */
@@ -4650,4 +4653,170 @@ body {
         right: 0;
     }
 
+}
+/* ═══════════════════════════════════════════════════════════════
+   PAGE TAB NAVIGATION (Main Tabs)
+   ═══════════════════════════════════════════════════════════════ */
+.page-tab-nav {
+    display: flex;
+    gap: 0;
+    background: var(--color-bg-secondary);
+    border-bottom: 2px solid var(--color-border);
+    margin-bottom: var(--spacing-xl);
+    position: sticky;
+    top: var(--header-height);
+    z-index: 100;
+    box-shadow: var(--shadow-sm);
+}
+
+.page-tab-btn {
+    flex: 0 0 auto;
+    padding: var(--spacing-md) var(--spacing-xl);
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: 'IBM Plex Sans', sans-serif;
+    border-bottom: 3px solid transparent;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.page-tab-btn:hover {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+}
+
+.page-tab-btn.tab-active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+    font-weight: 600;
+    background: var(--color-bg-primary);
+}
+
+.tab-status-badge {
+    font-size: 0.75rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    margin-left: var(--spacing-xs);
+}
+
+.tab-status-badge.badge-supported {
+    background: rgba(36, 161, 72, 0.1);
+    color: var(--color-success);
+}
+
+.tab-status-badge.badge-partial {
+    background: rgba(241, 194, 27, 0.1);
+    color: var(--color-warning);
+}
+
+.tab-status-badge.badge-unsupported {
+    background: rgba(218, 30, 40, 0.1);
+    color: var(--color-error);
+}
+
+/* Tab Panels */
+.tab-panel {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-panel.tab-panel-active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SUB-TAB NAVIGATION (Within Evidence Tab)
+   ═══════════════════════════════════════════════════════════════ */
+.sub-tab-nav {
+    display: flex;
+    gap: var(--spacing-sm);
+    background: var(--color-bg-tertiary);
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-xl);
+    border: 1px solid var(--color-border);
+}
+
+.sub-tab-btn {
+    flex: 1;
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: 'IBM Plex Sans', sans-serif;
+    border-radius: var(--radius-sm);
+    text-align: center;
+}
+
+.sub-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.7);
+    color: var(--color-text-primary);
+}
+
+/* Support both class and Alpine.js :class binding */
+.sub-tab-btn.sub-tab-active,
+button.sub-tab-active {
+    background: var(--color-bg-secondary) !important;
+    color: var(--color-primary) !important;
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+
+.sub-tab-content {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+/* Ensure Alpine.js x-show works properly */
+[x-cloak] {
+    display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ISSUE LEVEL SECTIONS (High-Level and Sub-Level Issues)
+   ═══════════════════════════════════════════════════════════════ */
+.issue-level-section {
+    margin-top: var(--spacing-lg);
+    padding: var(--spacing-md);
+    background: var(--color-bg-tertiary);
+    border-left: 4px solid var(--color-info);
+    border-radius: var(--radius-sm);
+}
+
+.issue-level-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.issue-level-description {
+    font-size: 0.9375rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
 }

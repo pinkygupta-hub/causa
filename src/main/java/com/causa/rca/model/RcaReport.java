@@ -14,6 +14,8 @@ public class RcaReport {
 
     public String title;
     public String issue;
+    public String highLevelIssue;
+    public String subLevelIssue;
     public String evidence;
     public List<String> supportedLogs;
     public List<String> validationChecks;
@@ -24,6 +26,8 @@ public class RcaReport {
 
     public RcaReport(String title,
                      String issue,
+                     String highLevelIssue,
+                     String subLevelIssue,
                      String evidence,
                      List<String> supportedLogs,
                      List<AssertionItem> assertions,
@@ -31,6 +35,8 @@ public class RcaReport {
                      FinalDecision finalDecision) {
         this.title = title;
         this.issue = issue;
+        this.highLevelIssue = highLevelIssue;
+        this.subLevelIssue = subLevelIssue;
         this.evidence = evidence;
         this.supportedLogs = supportedLogs;
         this.validationChecks = validationChecks;
@@ -43,7 +49,7 @@ public class RcaReport {
                      String issue,
                      String evidence,
                      List<String> supportedLogs) {
-        this(title, issue, evidence, supportedLogs, null, null, null);
+        this(title, issue, null, null, evidence, supportedLogs, null, null, null);
     }
 
     @Override

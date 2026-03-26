@@ -40,7 +40,7 @@ spec:
       serviceAccountName: rca-agent-sa
       containers:
       - name: rca-agent
-        image: quay.io/rh-ee-shesaxen/rca-agent:poc_v9
+        image: quay.io/rh-ee-shesaxen/rca-agent:poc_mar8
         imagePullPolicy: Always
         ports:
         - containerPort: 9090
@@ -84,8 +84,8 @@ spec:
           value: "http://kubernetes-mcp-server.default.svc.cluster.local:3000/mcp"
         resources:
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "4Gi"
+            cpu: "4"
 ---
 apiVersion: v1
 kind: Service
