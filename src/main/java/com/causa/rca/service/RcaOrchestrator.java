@@ -101,7 +101,6 @@ public class RcaOrchestrator {
 
             trackingService.recordStageEnd(sessionId, "anomaly_detection");
 
-
             if ("HEALTHY".equalsIgnoreCase(anomalyType)) {
 
                 RcaReport healthyReport = new RcaReport(

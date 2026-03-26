@@ -7,6 +7,8 @@ import com.causa.rca.model.artifact.EventArtifact.ReasonGroup;
 import com.causa.rca.model.artifact.LogArtifact;
 import com.causa.rca.model.artifact.LogArtifact.LogSummary;
 
+import com.causa.rca.model.artifact.jvm.gc.GcEvent;
+import com.causa.rca.model.artifact.jvm.gc.GcStats;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.apache.lucene.analysis.CharArraySet;
@@ -218,10 +220,30 @@ public class LogOptimizer {
         // This can be enhanced with more sophisticated summarization logic
         // TODO: BHARATH WILL ADD LOG SUMMARIZATION LOGIC
         List<String> deduped = deduplicateLines(rawLines);
-        
         LOG.debug("Generated summarized logs: " + deduped.size() + " entries from " + rawLines.size() + " raw lines");
-        
-        return deduped;
+
+        List<GcEvent> gcEvents = GcLogParser.parseEvents(deduped);
+        GcStats young = new GcStats();
+        GcStats full = new GcStats();
+        String youngGcReport = null;
+        String fullGcReport = null;
+
+        if (!gcEvents.isEmpty()) {
+
+
+            for (GcEvent e : gcEvents) {
+                if (e.type.equalsIgnoreCase("Young"))
+                    young.add(e);
+                if (e.type.equalsIgnoreCase("Full"))
+                    full.add(e);
+            }
+            youngGcReport = GcLogParser.buildStatsReport("YOUNG_GC", young, false);
+            fullGcReport = GcLogParser.buildStatsReport("FULL_GC", full, false);
+        }
+        List<String> summarizedLogs = new ArrayList<>();
+        summarizedLogs.add(youngGcReport);
+        summarizedLogs.add(fullGcReport);
+        return summarizedLogs;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
