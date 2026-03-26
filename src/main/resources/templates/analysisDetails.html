@@ -71,8 +71,21 @@
     <!-- TAB NAVIGATION                                                  -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <nav class="page-tab-nav">
-        <button class="page-tab-btn tab-active" id="tab-btn-analysis" onclick="switchPageTab('analysis')">
-            Analysis
+        <button class="page-tab-btn tab-active" id="tab-btn-overview" onclick="switchPageTab('overview')">
+            Overview
+        </button>
+        {#if session.report}
+            <button class="page-tab-btn" id="tab-btn-evidence" onclick="switchPageTab('evidence')">
+                Evidence
+            </button>
+        {/if}
+        {#if session.collectedArtifacts}
+            <button class="page-tab-btn" id="tab-btn-context" onclick="switchPageTab('context')">
+                Context
+            </button>
+        {/if}
+        <button class="page-tab-btn" id="tab-btn-analysis" onclick="switchPageTab('analysis')">
+            Analysis Steps
         </button>
         {#if session.report && session.report.assertions && !session.report.assertions.isEmpty()}
             <button class="page-tab-btn" id="tab-btn-validation" onclick="switchPageTab('validation')">
@@ -91,9 +104,9 @@
     </nav>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- TAB PANEL: ANALYSIS                                             -->
+    <!-- TAB PANEL: OVERVIEW                                             -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="tab-panel-analysis" class="tab-panel tab-panel-active">
+    <div id="tab-panel-overview" class="tab-panel tab-panel-active">
 
         <!-- Error Information (if failed) -->
         {#if session.status.name() == 'FAILED' && session.errorMessage}
@@ -110,7 +123,29 @@
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 1. POD INFORMATION                                              -->
+        <!-- ROOT CAUSE ANALYSIS (First in Overview)                         -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        {#if session.report}
+            <!-- Hidden data for clipboard copy -->
+            <div id="issue-title-text" style="display:none;">{session.report.title}</div>
+            <div id="issue-description-text" style="display:none;">{session.report.issue}</div>
+
+            <section class="details-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span>Root Cause Analysis</span>
+                        <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Root Cause Analysis">📋</button>
+                    </h2>
+                </div>
+                <div class="content-box issue-highlight">
+                    <h3 class="issue-title">{session.report.title}</h3>
+                    <div class="issue-description">{session.report.issue}</div>
+                </div>
+            </section>
+        {/if}
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- POD INFORMATION                                                 -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- Hidden data for Pod Information clipboard copy -->
         <div id="pod-namespace-text" style="display:none;">{session.namespace}</div>
@@ -162,79 +197,250 @@
             </div>
         </section>
 
-        {#if session.report}
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <!-- 2. ISSUE DETECTED                                               -->
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <section class="details-section">
-                <div class="section-header">
-                    <h2 class="section-title">
-                        <span>Root Cause Analysis</span>
-                        <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Root Cause Analysis">📋</button>
-                    </h2>
-                </div>
-                <div class="content-box issue-highlight">
-                    <h3 class="issue-title" id="issue-title-text">{session.report.title}</h3>
-                    <div class="issue-description" id="issue-description-text">{session.report.issue}</div>
-                </div>
-            </section>
+    </div>
+    <!-- END tab-panel-overview -->
 
-            <!-- Hidden data for clipboard copy -->
-            <div id="evidence-text" style="display:none;">{session.report.evidence}</div>
-            <div id="supported-logs-text" style="display:none;">{#for log in session.report.supportedLogs}{log}
-                {/for}</div>
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TAB PANEL: EVIDENCE                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    {#if session.report}
+        <div id="tab-panel-evidence" class="tab-panel" x-data="{ activeSubTab: 'evidence' }">
+            
+            <!-- Sub-tab navigation for Evidence -->
+            <nav class="sub-tab-nav">
+                <button class="sub-tab-btn" :class="{ 'sub-tab-active': activeSubTab === 'evidence' }" @click="activeSubTab = 'evidence'">
+                    Evidence
+                </button>
+                <button class="sub-tab-btn" :class="{ 'sub-tab-active': activeSubTab === 'logs' }" @click="activeSubTab = 'logs'">
+                    Supported Logs
+                </button>
+            </nav>
 
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <!-- 3. EVIDENCE                                                      -->
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <section class="details-section">
-                <div class="section-header expandable" @click="evidenceExpanded = !evidenceExpanded">
-                    <h2 class="section-title">
-                        <span>Evidence</span>
-                        <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('evidence-section')" title="Copy Evidence">📋</button>
-                    </h2>
-                    <span class="expand-icon" x-text="evidenceExpanded ? '▲' : '▼'">▲</span>
-                </div>
-                <div class="content-box" x-show="evidenceExpanded" x-collapse>
-                    <div class="evidence-content">{session.report.evidence}</div>
-                </div>
-            </section>
+            <!-- Evidence Sub-tab -->
+            <div x-show="activeSubTab === 'evidence'" class="sub-tab-content">
+                <!-- Hidden data for clipboard copy -->
+                <div id="evidence-text" style="display:none;">{session.report.evidence}</div>
+                <div id="supported-logs-text" style="display:none;">{#for log in session.report.supportedLogs}{log}
+                    {/for}</div>
 
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            <!-- 4. SUPPORTED LOGS                                               -->
-            <!-- ═══════════════════════════════════════════════════════════════ -->
-            {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
-                <section class="details-section" id="supported-logs-section">
-                    <div class="section-header expandable" @click="logsExpanded = !logsExpanded">
+                <!-- Evidence Section -->
+                <section class="details-section">
+                    <div class="section-header">
                         <h2 class="section-title">
-                            <span>Supported Logs</span>
-                            <button class="btn-copy-icon" onclick="event.stopPropagation(); copySection('supported-logs-section')" title="Copy Supported Logs">📋</button>
+                            <span>Evidence</span>
+                            <button class="btn-copy-icon" onclick="copySection('evidence-section')" title="Copy Evidence">📋</button>
                         </h2>
-                        <div class="section-header-actions">
-                            <a href="#context-logs-section" class="btn btn-view-logs btn-small"
-                               onclick="viewLogsSection(this)">
-                                📋 View Logs
-                            </a>
-                            <span class="expand-icon" x-text="logsExpanded ? '▲' : '▼'">▲</span>
-                        </div>
                     </div>
-                    <div class="content-box logs-box" x-show="logsExpanded" x-collapse>
-                        <div class="logs-content">
-                            {#for log in session.report.supportedLogs}
-                                <div class="log-entry">
-                                    <span class="log-bullet">•</span>
-                                    <span class="log-text">{log}</span>
-                                </div>
-                            {/for}
-                        </div>
+                    <div class="content-box">
+                        <div class="evidence-content">{session.report.evidence}</div>
                     </div>
                 </section>
-            {/if}
+            </div>
 
-        {/if}
+            <!-- Supported Logs Sub-tab -->
+            <div x-show="activeSubTab === 'logs'" class="sub-tab-content">
+                <!-- Supported Logs Section -->
+                {#if session.report.supportedLogs && !session.report.supportedLogs.isEmpty()}
+                    <section class="details-section" id="supported-logs-section">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <span>Supported Logs</span>
+                                <button class="btn-copy-icon" onclick="copySection('supported-logs-section')" title="Copy Supported Logs">📋</button>
+                            </h2>
+                        </div>
+                        <div class="content-box logs-box">
+                            <div class="logs-content">
+                                {#for log in session.report.supportedLogs}
+                                    <div class="log-entry">
+                                        <span class="log-bullet">•</span>
+                                        <span class="log-text">{log}</span>
+                                    </div>
+                                {/for}
+                            </div>
+                        </div>
+                    </section>
+                {#else}
+                    <section class="details-section">
+                        <div class="content-box">
+                            <p class="text-muted">No supported logs available.</p>
+                        </div>
+                    </section>
+                {/if}
+            </div>
+
+        </div>
+        <!-- END tab-panel-evidence -->
+    {/if}
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TAB PANEL: CONTEXT                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    {#if session.collectedArtifacts}
+        <div id="tab-panel-context" class="tab-panel">
+            <section class="details-section context-details-section">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <span>Context Details</span>
+                    </h2>
+                </div>
+
+                <!-- Metrics -->
+                {#if session.collectedArtifacts.metrics}
+                    <div class="artifact-subsection">
+                        <div class="artifact-header expandable" @click="metricsExpanded = !metricsExpanded">
+                            <span class="artifact-title">📊 Metrics</span>
+                            <span class="expand-icon small" x-text="metricsExpanded ? '▲' : '▼'">▼</span>
+                        </div>
+                        <div x-show="metricsExpanded" x-collapse>
+                            <div class="artifact-grid">
+                                <div class="artifact-metric">
+                                    <span class="metric-label">Memory Usage</span>
+                                    <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryUsage}</span>
+                                </div>
+                                <div class="artifact-metric">
+                                    <span class="metric-label">Memory Limit</span>
+                                    <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryLimit}</span>
+                                </div>
+                                <div class="artifact-metric">
+                                    <span class="metric-label">Memory %</span>
+                                    <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryPercent}%</span>
+                                </div>
+                                <div class="artifact-metric">
+                                    <span class="metric-label">CPU Usage</span>
+                                    <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuUsage} cores</span>
+                                </div>
+                                <div class="artifact-metric">
+                                    <span class="metric-label">CPU Limit</span>
+                                    <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuLimit} cores</span>
+                                </div>
+                                <div class="artifact-metric">
+                                    <span class="metric-label">CPU %</span>
+                                    <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuPercent}%</span>
+                                </div>
+                            </div>
+                            <div class="artifact-summary-box">
+                                <span class="artifact-summary-label">LLM Summary:</span>
+                                <span class="artifact-summary-value mono">{session.collectedArtifacts.metrics.summary}</span>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+
+                <!-- Events -->
+                {#if session.collectedArtifacts.events}
+                    <div class="artifact-subsection">
+                        <div class="artifact-header expandable" @click="eventsExpanded = !eventsExpanded">
+                            <span class="artifact-title">⚡ Events</span>
+                            {#if session.collectedArtifacts.events.summary}
+                                <span class="artifact-count-badge">
+                            {session.collectedArtifacts.events.summary.totalRawCount} raw /
+                            {session.collectedArtifacts.events.summary.deduplicatedCount} dedup
+                        </span>
+                            {/if}
+                            <span class="expand-icon small" x-text="eventsExpanded ? '▲' : '▼'">▼</span>
+                        </div>
+                        <div x-show="eventsExpanded" x-collapse>
+                            {#if session.collectedArtifacts.events.rawEvents && !session.collectedArtifacts.events.rawEvents.isEmpty()}
+                                <div class="logs-content artifact-logs">
+                                    {#for event in session.collectedArtifacts.events.rawEvents}
+                                        <div class="log-entry event-entry {event.type == 'Warning' ? 'event-warning' : 'event-normal'}">
+                                            <span class="event-type-badge">{event.type}</span>
+                                            <span class="event-reason">{event.reason}</span>
+                                            <span class="event-count">×{event.count}</span>
+                                            <span class="event-time">{event.lastTimestamp}</span>
+                                            <span class="log-text">{event.message}</span>
+                                        </div>
+                                    {/for}
+                                </div>
+                            {/if}
+                        </div>
+                    </div>
+                {/if}
+
+                <!-- Logs -->
+                {#if session.collectedArtifacts.logs}
+                    <div class="artifact-subsection" id="context-logs-section">
+                        <div class="artifact-header">
+                            <span class="artifact-title">📋 Logs</span>
+                            {#if session.collectedArtifacts.logs.summary}
+                                <span class="artifact-count-badge">
+                            {session.collectedArtifacts.logs.summary.totalRawLines} raw /
+                            {session.collectedArtifacts.logs.summary.deduplicatedLineCount} dedup
+                        </span>
+                                <span class="badge-error">{session.collectedArtifacts.logs.summary.errorCount} Errors</span>
+                                <span class="badge-warn">{session.collectedArtifacts.logs.summary.warnCount} Warnings</span>
+                                <span class="badge-info">{session.collectedArtifacts.logs.summary.infoCount} Info</span>
+                            {/if}
+                        </div>
+
+                        <!-- Raw Logs -->
+                        {#if session.collectedArtifacts.logs.rawLines && !session.collectedArtifacts.logs.rawLines.isEmpty()}
+                            <div class="artifact-sub-header expandable" @click="rawLogsExpanded = !rawLogsExpanded">
+                                <span class="artifact-sub-title">Raw Logs ({session.collectedArtifacts.logs.rawLines.size()} lines)</span>
+                                <span class="expand-icon small" x-text="rawLogsExpanded ? '▲' : '▼'">▼</span>
+                            </div>
+                            <div x-show="rawLogsExpanded" x-collapse>
+                                <div class="logs-content artifact-logs raw-logs-box">
+                                    {#for line in session.collectedArtifacts.logs.rawLines}
+                                        <div class="log-entry raw-log-line">
+                                            <span class="log-text">{line}</span>
+                                        </div>
+                                    {/for}
+                                </div>
+                            </div>
+                        {/if}
+
+                        <!-- Deduplicated Logs -->
+                        {#if session.collectedArtifacts.logs.deduplicatedLines && !session.collectedArtifacts.logs.deduplicatedLines.isEmpty()}
+                            <div class="artifact-sub-header expandable" @click="dedupLogsExpanded = !dedupLogsExpanded">
+                                <span class="artifact-sub-title">Deduplicated Logs ({session.collectedArtifacts.logs.deduplicatedLines.size()} lines)</span>
+                                <span class="expand-icon small" x-text="dedupLogsExpanded ? '▲' : '▼'">▼</span>
+                            </div>
+                            <div x-show="dedupLogsExpanded" x-collapse>
+                                <div class="logs-content artifact-logs raw-logs-box">
+                                    {#for line in session.collectedArtifacts.logs.deduplicatedLines}
+                                        <div class="log-entry">
+                                            <span class="log-text">{line}</span>
+                                        </div>
+                                    {/for}
+                                </div>
+                            </div>
+                        {/if}
+                    </div>
+                {/if}
+
+                <!-- JFR (optional) -->
+                {#if session.collectedArtifacts.jfr}
+                    <div class="artifact-subsection">
+                        <div class="artifact-header expandable" @click="jfrExpanded = !jfrExpanded">
+                            <span class="artifact-title">☕ JFR Analysis</span>
+                            <span class="artifact-count-badge">{session.collectedArtifacts.jfr.rawReportLength} chars</span>
+                            <span class="expand-icon small" x-text="jfrExpanded ? '▲' : '▼'">▼</span>
+                        </div>
+                        <div x-show="jfrExpanded" x-collapse>
+                            <div class="content-box logs-box">
+                                <div class="logs-content">
+                                    <div class="log-entry">
+                                        <span class="log-text">{session.collectedArtifacts.jfr.rawReport}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+
+            </section>
+        </div>
+        <!-- END tab-panel-context -->
+    {/if}
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- TAB PANEL: ANALYSIS                                             -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="tab-panel-analysis" class="tab-panel">
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 6. ANALYSIS METADATA                                            -->
+        <!-- ANALYSIS METADATA                                               -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="details-section">
             <div class="section-header">
@@ -366,169 +572,7 @@
         {/if}
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 8. CONTEXT DETAILS (Collected Artifacts — all collapsible)      -->
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        {#if session.collectedArtifacts}
-            <section class="details-section context-details-section">
-                <div class="section-header expandable" @click="contextExpanded = !contextExpanded">
-                    <h2 class="section-title">
-                        <span>Context Details</span>
-                    </h2>
-                    <span class="expand-icon" x-text="contextExpanded ? '▲' : '▼'">▼</span>
-                </div>
-                <div x-show="contextExpanded" x-collapse>
-
-                    <!-- 8a. Metrics -->
-                    {#if session.collectedArtifacts.metrics}
-                        <div class="artifact-subsection">
-                            <div class="artifact-header expandable" @click="metricsExpanded = !metricsExpanded">
-                                <span class="artifact-title">📊 Metrics</span>
-                                <span class="expand-icon small" x-text="metricsExpanded ? '▲' : '▼'">▼</span>
-                            </div>
-                            <div x-show="metricsExpanded" x-collapse>
-                                <div class="artifact-grid">
-                                    <div class="artifact-metric">
-                                        <span class="metric-label">Memory Usage</span>
-                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryUsage}</span>
-                                    </div>
-                                    <div class="artifact-metric">
-                                        <span class="metric-label">Memory Limit</span>
-                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryLimit}</span>
-                                    </div>
-                                    <div class="artifact-metric">
-                                        <span class="metric-label">Memory %</span>
-                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedMemoryPercent}%</span>
-                                    </div>
-                                    <div class="artifact-metric">
-                                        <span class="metric-label">CPU Usage</span>
-                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuUsage} cores</span>
-                                    </div>
-                                    <div class="artifact-metric">
-                                        <span class="metric-label">CPU Limit</span>
-                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuLimit} cores</span>
-                                    </div>
-                                    <div class="artifact-metric">
-                                        <span class="metric-label">CPU %</span>
-                                        <span class="metric-value">{session.collectedArtifacts.metrics.formattedCpuPercent}%</span>
-                                    </div>
-                                </div>
-                                <div class="artifact-summary-box">
-                                    <span class="artifact-summary-label">LLM Summary:</span>
-                                    <span class="artifact-summary-value mono">{session.collectedArtifacts.metrics.summary}</span>
-                                </div>
-                            </div>
-                        </div>
-                    {/if}
-
-                    <!-- 8b. Events -->
-                    {#if session.collectedArtifacts.events}
-                        <div class="artifact-subsection">
-                            <div class="artifact-header expandable" @click="eventsExpanded = !eventsExpanded">
-                                <span class="artifact-title">⚡ Events</span>
-                                {#if session.collectedArtifacts.events.summary}
-                                    <span class="artifact-count-badge">
-                                {session.collectedArtifacts.events.summary.totalRawCount} raw /
-                                {session.collectedArtifacts.events.summary.deduplicatedCount} dedup
-                            </span>
-                                {/if}
-                                <span class="expand-icon small" x-text="eventsExpanded ? '▲' : '▼'">▼</span>
-                            </div>
-                            <div x-show="eventsExpanded" x-collapse>
-                                {#if session.collectedArtifacts.events.rawEvents && !session.collectedArtifacts.events.rawEvents.isEmpty()}
-                                    <div class="logs-content artifact-logs">
-                                        {#for event in session.collectedArtifacts.events.rawEvents}
-                                            <div class="log-entry event-entry {event.type == 'Warning' ? 'event-warning' : 'event-normal'}">
-                                                <span class="event-type-badge">{event.type}</span>
-                                                <span class="event-reason">{event.reason}</span>
-                                                <span class="event-count">×{event.count}</span>
-                                                <span class="event-time">{event.lastTimestamp}</span>
-                                                <span class="log-text">{event.message}</span>
-                                            </div>
-                                        {/for}
-                                    </div>
-                                {/if}
-                            </div>
-                        </div>
-                    {/if}
-
-                    <!-- 8c. Logs -->
-                    {#if session.collectedArtifacts.logs}
-                        <div class="artifact-subsection" id="context-logs-section">
-                            <div class="artifact-header">
-                                <span class="artifact-title">📋 Logs</span>
-                                {#if session.collectedArtifacts.logs.summary}
-                                    <span class="artifact-count-badge">
-                                {session.collectedArtifacts.logs.summary.totalRawLines} raw /
-                                {session.collectedArtifacts.logs.summary.deduplicatedLineCount} dedup
-                            </span>
-                                    <span class="badge-error">{session.collectedArtifacts.logs.summary.errorCount} Errors</span>
-                                    <span class="badge-warn">{session.collectedArtifacts.logs.summary.warnCount} Warnings</span>
-                                    <span class="badge-info">{session.collectedArtifacts.logs.summary.infoCount} Info</span>
-                                {/if}
-                            </div>
-
-                            <!-- Raw Logs -->
-                            {#if session.collectedArtifacts.logs.rawLines && !session.collectedArtifacts.logs.rawLines.isEmpty()}
-                                <div class="artifact-sub-header expandable" @click="rawLogsExpanded = !rawLogsExpanded">
-                                    <span class="artifact-sub-title">Raw Logs ({session.collectedArtifacts.logs.rawLines.size()} lines)</span>
-                                    <span class="expand-icon small" x-text="rawLogsExpanded ? '▲' : '▼'">▼</span>
-                                </div>
-                                <div x-show="rawLogsExpanded" x-collapse>
-                                    <div class="logs-content artifact-logs raw-logs-box">
-                                        {#for line in session.collectedArtifacts.logs.rawLines}
-                                            <div class="log-entry raw-log-line">
-                                                <span class="log-text">{line}</span>
-                                            </div>
-                                        {/for}
-                                    </div>
-                                </div>
-                            {/if}
-
-                            <!-- Deduplicated Logs -->
-                            {#if session.collectedArtifacts.logs.deduplicatedLines && !session.collectedArtifacts.logs.deduplicatedLines.isEmpty()}
-                                <div class="artifact-sub-header expandable" @click="dedupLogsExpanded = !dedupLogsExpanded">
-                                    <span class="artifact-sub-title">Deduplicated Logs ({session.collectedArtifacts.logs.deduplicatedLines.size()} lines)</span>
-                                    <span class="expand-icon small" x-text="dedupLogsExpanded ? '▲' : '▼'">▼</span>
-                                </div>
-                                <div x-show="dedupLogsExpanded" x-collapse>
-                                    <div class="logs-content artifact-logs raw-logs-box">
-                                        {#for line in session.collectedArtifacts.logs.deduplicatedLines}
-                                            <div class="log-entry">
-                                                <span class="log-text">{line}</span>
-                                            </div>
-                                        {/for}
-                                    </div>
-                                </div>
-                            {/if}
-                        </div>
-                    {/if}
-
-                    <!-- 8d. JFR (optional) -->
-                    {#if session.collectedArtifacts.jfr}
-                        <div class="artifact-subsection">
-                            <div class="artifact-header expandable" @click="jfrExpanded = !jfrExpanded">
-                                <span class="artifact-title">☕ JFR Analysis</span>
-                                <span class="artifact-count-badge">{session.collectedArtifacts.jfr.rawReportLength} chars</span>
-                                <span class="expand-icon small" x-text="jfrExpanded ? '▲' : '▼'">▼</span>
-                            </div>
-                            <div x-show="jfrExpanded" x-collapse>
-                                <div class="content-box logs-box">
-                                    <div class="logs-content">
-                                        <div class="log-entry">
-                                            <span class="log-text">{session.collectedArtifacts.jfr.rawReport}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {/if}
-
-                </div>
-            </section>
-        {/if}
-
-        <!-- ═══════════════════════════════════════════════════════════════ -->
-        <!-- 9. MODEL INFORMATION + SESSION ID                               -->
+        <!-- MODEL INFORMATION                                               -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <section class="details-section">
             <div class="section-header">
@@ -798,14 +842,30 @@
 <script>
     /* ── Tab switching ── */
     function switchPageTab(tab) {
+        // Remove active class from all tab buttons
         document.querySelectorAll('.page-tab-btn').forEach(function(btn) {
             btn.classList.remove('tab-active');
         });
+        
+        // Remove active class from all tab panels
         document.querySelectorAll('.tab-panel').forEach(function(panel) {
             panel.classList.remove('tab-panel-active');
         });
-        document.getElementById('tab-btn-' + tab).classList.add('tab-active');
-        document.getElementById('tab-panel-' + tab).classList.add('tab-panel-active');
+        
+        // Add active class to selected tab button
+        var tabBtn = document.getElementById('tab-btn-' + tab);
+        if (tabBtn) {
+            tabBtn.classList.add('tab-active');
+        }
+        
+        // Add active class to selected tab panel
+        var tabPanel = document.getElementById('tab-panel-' + tab);
+        if (tabPanel) {
+            tabPanel.classList.add('tab-panel-active');
+        }
+        
+        // Scroll to top of page when switching tabs
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function viewLogsSection(link) {

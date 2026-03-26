@@ -323,6 +323,7 @@ public class RcaOrchestrator {
             RcaReport report =
                     mapper.readValue(finalJson, RcaReport.class);
 
+            trackingService.recordStageEnd(sessionId, "validation");
             trackingService.completeSession(sessionId, report);
 
         } catch (Exception e) {
