@@ -15,6 +15,7 @@ import com.causa.rca.utils.TokenBudgetEnforcer;
 import com.causa.rca.utils.TokenProvider;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import io.fabric8.kubernetes.client.KubernetesClient;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -58,6 +59,9 @@ public class DataCollectorService {
 
     @Inject
     KubernetesMcpClient kubernetesMcpClient;
+
+    @Inject
+    KubernetesClient kubernetesClient;
 
     @Inject
     @RestClient
@@ -372,23 +376,36 @@ public class DataCollectorService {
      */
     public String fetchRawLogs(String namespace, String podName) {
         LOG.info("Fetching logs for pod: " + podName);
+        String logs = null;
         try {
             // KubernetesMcpClient.getPodLogs uses MCP (pods_log) when configured,
             // falling back to Fabric8 when MCP is unavailable.
-            String logs = kubernetesMcpClient.getPodLogs(namespace, podName, 500, false);
+            logs = kubernetesMcpClient.getPodLogs(namespace, podName, 5000, false);
 
             if (logs == null || logs.trim().isEmpty()) {
                 LOG.info("Current logs empty, attempting previous container logs for: " + podName);
-                logs = kubernetesMcpClient.getPodLogs(namespace, podName, 500, true);
             }
-
-            LOG.info("Gathered logs (length: " + (logs != null ? logs.length() : 0) + ")");
-            return (logs != null && !logs.isEmpty()) ? logs : "";
-
         } catch (Exception e) {
-            LOG.error("Failed to fetch pod logs for " + podName, e);
-            return "";
+            LOG.error("Failed to fetch pod logs for " + podName + "via MCP", e);
+            LOG.info("Failling back to kubernetes client");
+            try {
+                logs = kubernetesClient.pods()
+                        .inNamespace(namespace).withName(podName)
+                        .tailingLines(5000).getLog();
+
+                if (logs == null || logs.trim().isEmpty()) {
+                    LOG.info("Current logs empty, attempting previous container logs for: " + podName);
+                    logs = kubernetesClient.pods()
+                            .inNamespace(namespace).withName(podName)
+                            .terminated().tailingLines(5000).getLog();
+                }
+
+                LOG.info("Gathered logs (length: " + (logs != null ? logs.length() : 0) + ")");
+            } catch (Exception ex) {
+                LOG.error("Fallback Kubernetes client also failed for pod: {}", podName, ex);
+            }
         }
+        return (logs != null && !logs.trim().isEmpty()) ? logs : "";
     }
 
     // ─────────────────────────────────────────────────────────────────────────
