@@ -130,5 +130,29 @@ public class CollectedArtifacts {
 
         return sb.toString();
     }
+
+
+
+    public String toAnamolyLLMContext() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("=POD_STATUS= ");
+        if (podInfo != null && podInfo.summary != null) {
+            sb.append(podInfo.summary);
+        }
+        sb.append("\n");
+
+        sb.append("=METRICS= ");
+        if (metrics != null && metrics.summary != null) {
+            sb.append(metrics.summary);
+        }
+        sb.append("\n");
+
+        sb.append("=EVENTS= ");
+        if (events != null && events.summary != null) {
+            sb.append(events.summary.toString());
+        }
+        return sb.toString();
+    }
 }
 

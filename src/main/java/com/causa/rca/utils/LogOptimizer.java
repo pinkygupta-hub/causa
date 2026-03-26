@@ -197,6 +197,31 @@ public class LogOptimizer {
         return new ArrayList<>(seen.values());
     }
 
+    /**
+     * Generates summarized logs from raw log lines.
+     * <p>
+     * This is a dummy implementation that can be enhanced later with more sophisticated
+     * summarization logic such as clustering, pattern extraction, or AI-based summarization.
+     * </p>
+     *
+     * @param rawLines the raw log lines
+     * @return a list of summarized log entries
+     */
+    public List<String> generateSummarizedLogsFromRawLogs(List<String> rawLines) {
+        if (rawLines == null || rawLines.isEmpty()) {
+            return List.of();
+        }
+
+        // Dummy implementation: For now, just return deduplicated and normalized lines
+        // This can be enhanced with more sophisticated summarization logic
+        // TODO: BHARATH WILL ADD LOG SUMMARIZATION LOGIC
+        List<String> deduped = deduplicateLines(rawLines);
+        
+        LOG.debug("Generated summarized logs: " + deduped.size() + " entries from " + rawLines.size() + " raw lines");
+        
+        return deduped;
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Log summary builder
     // ─────────────────────────────────────────────────────────────────────────
