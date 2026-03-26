@@ -27,7 +27,7 @@ exclude:
   - vendor
   - .sass-cache
   - .jekyll-cache
-  - README.md
+  - k8s-mcp-server.md
 
 defaults:
   - scope:

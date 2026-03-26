@@ -77,6 +77,11 @@ spec:
         # RAG Configuration
         - name: RAG_ENABLED
           value: "false"
+        # Kubernetes MCP Server Configuration
+        - name: KUBERNETES_MCP_ENABLED
+          value: "true"
+        - name: QUARKUS_LANGCHAIN4J_MCP__K8S__URL
+          value: "http://kubernetes-mcp-server.default.svc.cluster.local:3000/mcp"
         resources:
           limits:
             memory: "512Mi"

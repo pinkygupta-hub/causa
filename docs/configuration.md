@@ -259,4 +259,27 @@ RCA_CLEANUP_SCHEDULE=0 0 2 ? * SUN
 
 ---
 
+### Kubernetes MCP Server
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__URL` | `http://kubernetes-mcp-server:3000/mcp` | MCP server endpoint URL |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__TRANSPORT_TYPE` | `streamable-http` | Transport type (`streamable-http` or `http` for legacy SSE) |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__TOOL_EXECUTION_TIMEOUT` | `60s` | Per-tool call timeout |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__LOG_REQUESTS` | `false` | Log raw MCP request wire traffic |
+| `QUARKUS_LANGCHAIN4J_MCP__K8S__LOG_RESPONSES` | `false` | Log raw MCP response wire traffic |
+
+**Example:**
+```bash
+# In-cluster (default)
+QUARKUS_LANGCHAIN4J_MCP__K8S__URL=http://kubernetes-mcp-server:3000/mcp
+
+# Local development (kubectl port-forward svc/kubernetes-mcp-server 3000:3000)
+QUARKUS_LANGCHAIN4J_MCP__K8S__URL=http://localhost:3000/mcp
+```
+
+> If the MCP server is unreachable, Causa falls back automatically to the direct Fabric8 Kubernetes client.
+
+---
+
 [← Back to API Reference](api-reference.html) | [Home](index.html)

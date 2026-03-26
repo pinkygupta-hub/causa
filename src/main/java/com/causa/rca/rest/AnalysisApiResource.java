@@ -1,5 +1,6 @@
 package com.causa.rca.rest;
 
+import com.causa.rca.clients.KubernetesMcpClient;
 import com.causa.rca.model.RcaAnalysisSession;
 import com.causa.rca.model.AnalysisStatus;
 import com.causa.rca.service.AnalysisTrackingService;
@@ -41,10 +42,13 @@ public class AnalysisApiResource {
     
     @Inject
     AnalysisTrackingService trackingService;
-    
+
+    @Inject
+    KubernetesMcpClient kubernetesMcpClient;
+
     @Inject
     KubernetesClient kubernetesClient;
-    
+
     @ConfigProperty(name = "rca.dashboard.page-size", defaultValue = "50")
     int defaultPageSize;
     
@@ -191,10 +195,16 @@ public class AnalysisApiResource {
         LOG.info("Fetching all workloads");
         
         try {
-            // Find all pods across all namespaces
-            List<Pod> pods = kubernetesClient.pods().inAnyNamespace()
-                    .list()
-                    .getItems();
+            // Find all pods across all namespaces.
+            // KubernetesMcpClient tries MCP first; if MCP is unreachable it automatically
+            // falls back to direct Fabric8 access.
+            List<Pod> pods;
+            try {
+                pods = kubernetesMcpClient.listAllPods();
+            } catch (Exception e) {
+                LOG.warnf("KubernetesMcpClient.listAllPods failed (%s), falling back to direct Fabric8", e.getMessage());
+                pods = kubernetesClient.pods().inAnyNamespace().list().getItems();
+            }
             
             List<Map<String, Object>> workloads = new ArrayList<>();
             
@@ -202,11 +212,11 @@ public class AnalysisApiResource {
                 Map<String, Object> workload = new HashMap<>();
                 workload.put("namespace", pod.getMetadata().getNamespace());
                 workload.put("podName", pod.getMetadata().getName());
-                workload.put("status", pod.getStatus().getPhase());
+                workload.put("status", pod.getStatus() != null ? pod.getStatus().getPhase() : "Unknown");
                 
                 // Get restart count
                 int restarts = 0;
-                if (pod.getStatus().getContainerStatuses() != null) {
+                if (pod.getStatus() != null && pod.getStatus().getContainerStatuses() != null) {
                     restarts = pod.getStatus().getContainerStatuses().stream()
                             .mapToInt(cs -> cs.getRestartCount())
                             .sum();
@@ -218,7 +228,7 @@ public class AnalysisApiResource {
             
             LOG.infof("Found %d workloads", workloads.size());
             return Response.ok(workloads).build();
-            
+
         } catch (Exception e) {
             LOG.error("Error fetching workloads", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
