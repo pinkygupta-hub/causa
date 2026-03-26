@@ -75,6 +75,8 @@ public class RcaOrchestrator {
     void runAnalysisInternal(String sessionId, String namespace, String podName) {
 
         try {
+            String highLevelIssue = null;
+            String subLevelIssue = null;
 
             trackingService.recordStageStart(sessionId, "data_collection");
             trackingService.updateStatus(sessionId, AnalysisStatus.COLLECTING_DATA,
@@ -95,9 +97,10 @@ public class RcaOrchestrator {
             String anamolyContext = artifacts.toAnamolyLLMContext();
             String rawAnomaly = anomalyDetector.detectAnomaly(anamolyContext);
             String anomalyType = parseAnomalyType(rawAnomaly);
-            
+
             // Store anomaly type in session for UI display
             trackingService.updateAnomalyType(sessionId, anomalyType);
+            highLevelIssue = rawAnomaly;
 
             trackingService.recordStageEnd(sessionId, "anomaly_detection");
 
@@ -120,6 +123,8 @@ public class RcaOrchestrator {
                 String summarizedLogsContext = artifacts.toSummarizedLogsContext();
                 String gcDetectionRaw = gcPauseDetector.detectGcPause(summarizedLogsContext);
                 String gcAnomalyType = parseGcAnomalyType(gcDetectionRaw);
+
+                subLevelIssue = gcDetectionRaw;
 
                 LOG.info("Second-stage GC detection result: " + gcAnomalyType);
 
@@ -301,6 +306,10 @@ public class RcaOrchestrator {
                     new LinkedHashMap<>();
 
             finalReport.put("title", extractRootCauseTitle(rcaOutput));
+            if (null != highLevelIssue)
+                finalReport.put("highLevelIssues", highLevelIssue);
+            if (null != subLevelIssue)
+                finalReport.put("subLevelIssues", subLevelIssue);
             finalReport.put("issue", issue);
             finalReport.put("evidence", evidence);
             finalReport.put("supportedLogs", supportedLogs);
