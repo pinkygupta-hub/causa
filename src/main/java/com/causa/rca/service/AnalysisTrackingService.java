@@ -156,6 +156,30 @@ public class AnalysisTrackingService {
     }
     
     /**
+     * Updates the anomaly type for a session.
+     *
+     * @param sessionId the unique session identifier
+     * @param anomalyType the detected anomaly type (e.g., "CPU", "MEMORY", "OOM", "HEALTHY")
+     * @return true if update was successful, false if session not found
+     */
+    public boolean updateAnomalyType(String sessionId, String anomalyType) {
+        Optional<RcaAnalysisSession> optSession = repository.findBySessionId(sessionId);
+        
+        if (optSession.isEmpty()) {
+            LOG.warnf("Attempted to update anomaly type for non-existent session: %s", sessionId);
+            return false;
+        }
+        
+        RcaAnalysisSession session = optSession.get();
+        session.anomalyType = anomalyType;
+        repository.update(session);
+        
+        LOG.infof("Updated anomaly type to '%s' for session %s", anomalyType, sessionId);
+        
+        return true;
+    }
+    
+    /**
      * Stores the collected diagnostic artifacts on the session document.
      * <p>
      * Called immediately after data collection completes so that raw evidence

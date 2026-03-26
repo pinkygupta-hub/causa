@@ -94,8 +94,12 @@ public class RcaOrchestrator {
             String anamolyContext = artifacts.toAnamolyLLMContext();
             String rawAnomaly = anomalyDetector.detectAnomaly(anamolyContext);
             String anomalyType = parseAnomalyType(rawAnomaly);
+            
+            // Store anomaly type in session for UI display
+            trackingService.updateAnomalyType(sessionId, anomalyType);
 
             trackingService.recordStageEnd(sessionId, "anomaly_detection");
+
 
             if ("HEALTHY".equalsIgnoreCase(anomalyType)) {
 
@@ -108,6 +112,14 @@ public class RcaOrchestrator {
                 trackingService.markHealthy(sessionId, healthyReport);
                 return;
             }
+
+            trackingService.recordStageStart(sessionId, "memory_analysis");
+            // TODO: BHARATH WILL ADD MEMORY ANALYSIS LOGIC HERE
+            trackingService.updateStatus(sessionId, AnalysisStatus.MEMORY_ANALYSIS,
+                    "Memory pressure detected, analyzing memory usage and collecting GC logs");
+
+            trackingService.recordStageEnd(sessionId, "memory_analysis");
+
 
             trackingService.recordStageStart(sessionId, "rca_analysis");
 
@@ -275,7 +287,7 @@ public class RcaOrchestrator {
             Map<String, Object> finalReport =
                     new LinkedHashMap<>();
 
-            finalReport.put("title", "RCA Validation Report");
+            finalReport.put("title", extractRootCauseTitle(rcaOutput));
             finalReport.put("issue", issue);
             finalReport.put("evidence", evidence);
             finalReport.put("supportedLogs", supportedLogs);
@@ -403,10 +415,25 @@ public class RcaOrchestrator {
         return "OTHERS";
     }
 
+    private String extractRootCauseTitle(String rcaOutput) {
+
+        Pattern pattern = Pattern.compile(
+                "(?i)ROOT[_ ]CAUSE[_ ]TITLE\\s*:\\s*(.*?)(?=ROOT[_ ]CAUSE\\s*:|$)",
+                Pattern.DOTALL);
+
+        Matcher matcher = pattern.matcher(rcaOutput);
+
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+
+        return "Root Cause Analysis Report";
+    }
+
     private String extractRootCause(String rcaOutput) {
 
         Pattern pattern = Pattern.compile(
-                "(?i)ROOT[_ ]CAUSE\\s*:\\s*(.*?)(KEY[_ ]EVIDENCE|SUPPORTED LOGS|RECOMMENDATIONS|$)",
+                "(?i)ROOT[_ ]CAUSE\\s*:\\s*(.*?)(?=KEY[_ ]EVIDENCE\\s*:|SUPPORTED[_ ]LOGS\\s*:|$)",
                 Pattern.DOTALL);
 
         Matcher matcher = pattern.matcher(rcaOutput);

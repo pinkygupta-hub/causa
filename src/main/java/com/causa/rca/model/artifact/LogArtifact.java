@@ -120,6 +120,9 @@ public class LogArtifact {
         /** Number of lines containing INFO. */
         public int infoCount;
 
+
+        
+
         /**
          * Representative log lines selected by priority:
          * <ol>

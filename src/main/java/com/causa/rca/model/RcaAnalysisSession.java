@@ -92,10 +92,16 @@ public class RcaAnalysisSession extends PanacheMongoEntity {
     
     /**
      * Stage timing information - tracks start and end times for each analysis stage.
-     * Map keys: "data_collection", "anomaly_detection", "rca_analysis", "validation"
+     * Map keys: "data_collection", "anomaly_detection", "memory_analysis", "rca_analysis", "validation"
      * Map values: Map with "start" and "end" LocalDateTime values
      */
     public Map<String, Map<String, LocalDateTime>> stageTiming;
+    
+    /**
+     * Detected anomaly type (e.g., "CPU", "MEMORY", "OOM", "HEALTHY").
+     * Set after anomaly detection stage completes.
+     */
+    public String anomalyType;
     
     /**
      * Default constructor for MongoDB deserialization.
@@ -251,6 +257,7 @@ public class RcaAnalysisSession extends PanacheMongoEntity {
             status == AnalysisStatus.INITIATED ||
             status == AnalysisStatus.COLLECTING_DATA ||
             status == AnalysisStatus.DETECTING_ANOMALY ||
+            status == AnalysisStatus.MEMORY_ANALYSIS ||
             status == AnalysisStatus.ANALYZING_RCA ||
             status == AnalysisStatus.VALIDATING
         );
@@ -267,6 +274,95 @@ public class RcaAnalysisSession extends PanacheMongoEntity {
             status == AnalysisStatus.FAILED ||
             status == AnalysisStatus.HEALTHY
         );
+    }
+    
+    /**
+     * Gets the status CSS class for a specific stage.
+     * Returns "stage-completed", "stage-in-progress", or "stage-pending".
+     *
+     * @param stage the stage name (e.g., "data_collection", "anomaly_detection", "memory_analysis", "rca_analysis", "validation")
+     * @return CSS class for the stage status
+     */
+    public String getStageStatus(String stage) {
+        if (stageTiming == null || !stageTiming.containsKey(stage)) {
+            return "stage-pending";
+        }
+        
+        Map<String, LocalDateTime> timing = stageTiming.get(stage);
+        LocalDateTime start = timing.get("start");
+        LocalDateTime end = timing.get("end");
+        
+        if (start == null) {
+            return "stage-pending";
+        }
+        
+        if (end != null) {
+            return "stage-completed";
+        }
+        
+        return "stage-in-progress";
+    }
+    
+    /**
+     * Gets a descriptive text for what was done in a specific stage.
+     *
+     * @param stage the stage name
+     * @return description of what was done in the stage
+     */
+    public String getStageDescription(String stage) {
+        String status = getStageStatus(stage);
+        
+        switch (stage) {
+            case "data_collection":
+                if ("stage-completed".equals(status)) {
+                    return "Collected pod events, status, and metrics";
+                } else if ("stage-in-progress".equals(status)) {
+                    return "Collecting diagnostic data...";
+                } else {
+                    return "Pending data collection";
+                }
+                
+            case "anomaly_detection":
+                if ("stage-completed".equals(status)) {
+                    String type = anomalyType != null ? anomalyType : "Unknown";
+                    return "Detected anomaly: " + type;
+                } else if ("stage-in-progress".equals(status)) {
+                    return "Analyzing data for anomalies...";
+                } else {
+                    return "Pending anomaly detection";
+                }
+                
+            case "memory_analysis":
+                if ("stage-completed".equals(status)) {
+                    return "Memory pressure detected, collected additional data";
+                } else if ("stage-in-progress".equals(status)) {
+                    return "Analyzing memory usage...";
+                } else {
+                    return "Pending memory analysis";
+                }
+                
+            case "rca_analysis":
+                if ("stage-completed".equals(status)) {
+                    String type = anomalyType != null ? anomalyType : "detected issue";
+                    return "Performed RCA for " + type;
+                } else if ("stage-in-progress".equals(status)) {
+                    return "Analyzing root cause...";
+                } else {
+                    return "Pending root cause analysis";
+                }
+                
+            case "validation":
+                if ("stage-completed".equals(status)) {
+                    return "Validated RCA response";
+                } else if ("stage-in-progress".equals(status)) {
+                    return "Validating analysis...";
+                } else {
+                    return "Pending validation";
+                }
+                
+            default:
+                return "";
+        }
     }
     
     /**
