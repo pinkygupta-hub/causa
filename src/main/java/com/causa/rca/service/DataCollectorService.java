@@ -386,7 +386,7 @@ public class DataCollectorService {
                 LOG.info("Current logs empty, attempting previous container logs for: " + podName);
             }
         } catch (Exception e) {
-            LOG.error("Failed to fetch pod logs for " + podName + "via MCP", e);
+//            LOG.error("Failed to fetch pod logs for " + podName + "via MCP", e);
             LOG.info("Failling back to kubernetes client");
             try {
                 logs = kubernetesClient.pods()
