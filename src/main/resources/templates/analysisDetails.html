@@ -273,7 +273,7 @@
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <!-- 7. STAGE PERFORMANCE                                            -->
         <!-- ═══════════════════════════════════════════════════════════════ -->
-        {#if session.stageTiming && !session.stageTiming.isEmpty() && (session.status.name() == 'COMPLETED' || session.status.name() == 'HEALTHY')}
+        {#if session.stageTiming && !session.stageTiming.isEmpty()}
             <section class="stage-timing-section">
                 <div class="section-header">
                     <h2 class="section-title">
@@ -282,27 +282,83 @@
                 </div>
                 <div class="timing-grid">
                     {#if session.stageTiming.containsKey('data_collection')}
-                        <div class="timing-card">
-                            <div class="timing-stage">Data Collection</div>
+                        <div class="timing-card {session.getStageStatus('data_collection')}">
+                            <div class="timing-stage">
+                                Data Collection
+                                {#if session.getStageStatus('data_collection') == 'stage-completed'}
+                                    <span class="stage-status-badge">✓</span>
+                                {#else if session.getStageStatus('data_collection') == 'stage-in-progress'}
+                                    <span class="stage-status-badge">⟳</span>
+                                {#else if session.getStageStatus('data_collection') == 'stage-pending'}
+                                    <span class="stage-status-badge">○</span>
+                                {/if}
+                            </div>
                             <div class="timing-duration">{session.getFormattedStageDuration('data_collection')}</div>
+                            <div class="timing-description">{session.getStageDescription('data_collection')}</div>
                         </div>
                     {/if}
                     {#if session.stageTiming.containsKey('anomaly_detection')}
-                        <div class="timing-card">
-                            <div class="timing-stage">Anomaly Detection</div>
+                        <div class="timing-card {session.getStageStatus('anomaly_detection')}">
+                            <div class="timing-stage">
+                                Anomaly Detection
+                                {#if session.getStageStatus('anomaly_detection') == 'stage-completed'}
+                                    <span class="stage-status-badge">✓</span>
+                                {#else if session.getStageStatus('anomaly_detection') == 'stage-in-progress'}
+                                    <span class="stage-status-badge">⟳</span>
+                                {#else if session.getStageStatus('anomaly_detection') == 'stage-pending'}
+                                    <span class="stage-status-badge">○</span>
+                                {/if}
+                            </div>
                             <div class="timing-duration">{session.getFormattedStageDuration('anomaly_detection')}</div>
+                            <div class="timing-description">{session.getStageDescription('anomaly_detection')}</div>
+                        </div>
+                    {/if}
+                    {#if session.stageTiming.containsKey('memory_analysis')}
+                        <div class="timing-card {session.getStageStatus('memory_analysis')}">
+                            <div class="timing-stage">
+                                Memory Analysis
+                                {#if session.getStageStatus('memory_analysis') == 'stage-completed'}
+                                    <span class="stage-status-badge">✓</span>
+                                {#else if session.getStageStatus('memory_analysis') == 'stage-in-progress'}
+                                    <span class="stage-status-badge">⟳</span>
+                                {#else if session.getStageStatus('memory_analysis') == 'stage-pending'}
+                                    <span class="stage-status-badge">○</span>
+                                {/if}
+                            </div>
+                            <div class="timing-duration">{session.getFormattedStageDuration('memory_analysis')}</div>
+                            <div class="timing-description">{session.getStageDescription('memory_analysis')}</div>
                         </div>
                     {/if}
                     {#if session.stageTiming.containsKey('rca_analysis')}
-                        <div class="timing-card">
-                            <div class="timing-stage">RCA Analysis</div>
+                        <div class="timing-card {session.getStageStatus('rca_analysis')}">
+                            <div class="timing-stage">
+                                RCA Analysis
+                                {#if session.getStageStatus('rca_analysis') == 'stage-completed'}
+                                    <span class="stage-status-badge">✓</span>
+                                {#else if session.getStageStatus('rca_analysis') == 'stage-in-progress'}
+                                    <span class="stage-status-badge">⟳</span>
+                                {#else if session.getStageStatus('rca_analysis') == 'stage-pending'}
+                                    <span class="stage-status-badge">○</span>
+                                {/if}
+                            </div>
                             <div class="timing-duration">{session.getFormattedStageDuration('rca_analysis')}</div>
+                            <div class="timing-description">{session.getStageDescription('rca_analysis')}</div>
                         </div>
                     {/if}
                     {#if session.stageTiming.containsKey('validation')}
-                        <div class="timing-card">
-                            <div class="timing-stage">Validation</div>
+                        <div class="timing-card {session.getStageStatus('validation')}">
+                            <div class="timing-stage">
+                                Validation
+                                {#if session.getStageStatus('validation') == 'stage-completed'}
+                                    <span class="stage-status-badge">✓</span>
+                                {#else if session.getStageStatus('validation') == 'stage-in-progress'}
+                                    <span class="stage-status-badge">⟳</span>
+                                {#else if session.getStageStatus('validation') == 'stage-pending'}
+                                    <span class="stage-status-badge">○</span>
+                                {/if}
+                            </div>
                             <div class="timing-duration">{session.getFormattedStageDuration('validation')}</div>
+                            <div class="timing-description">{session.getStageDescription('validation')}</div>
                         </div>
                     {/if}
                 </div>

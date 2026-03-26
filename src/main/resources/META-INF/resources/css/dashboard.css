@@ -1036,6 +1036,33 @@ body {
     padding: var(--spacing-md);
     border-radius: var(--radius-md);
     border-left: 4px solid var(--color-primary);
+    transition: all var(--transition-normal);
+}
+
+.timing-card.stage-completed {
+    border-left-color: var(--color-success);
+    background: rgba(36, 161, 72, 0.05);
+}
+
+.timing-card.stage-in-progress {
+    border-left-color: var(--color-info);
+    background: rgba(0, 114, 195, 0.05);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.timing-card.stage-pending {
+    border-left-color: var(--color-text-muted);
+    background: var(--color-bg-tertiary);
+    opacity: 0.6;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .timing-stage {
@@ -1045,12 +1072,64 @@ body {
     letter-spacing: 0.5px;
     margin-bottom: var(--spacing-xs);
     font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.stage-status-badge {
+    font-size: 1rem;
+    margin-left: var(--spacing-sm);
+}
+
+.stage-completed .stage-status-badge {
+    color: var(--color-success);
+}
+
+.stage-in-progress .stage-status-badge {
+    color: var(--color-info);
+    animation: spin 2s linear infinite;
+}
+
+.stage-pending .stage-status-badge {
+    color: var(--color-text-muted);
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .timing-duration {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--color-text-primary);
+}
+
+.timing-description {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-xs);
+    line-height: 1.4;
+    font-style: italic;
+}
+
+.stage-completed .timing-description {
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+.stage-in-progress .timing-description {
+    color: var(--color-info);
+    font-weight: 500;
+}
+
+.stage-pending .timing-description {
+    color: var(--color-text-muted);
 }
 
 .section-description {

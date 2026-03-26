@@ -27,6 +27,8 @@ public enum AnalysisStatus {
      * Performing root cause analysis using AI to determine the underlying issue.
      */
     ANALYZING_RCA,
+
+    MEMORY_ANALYSIS,
     
     /**
      * Validating and formatting the analysis results into a structured report.
@@ -59,6 +61,7 @@ public enum AnalysisStatus {
             case INITIATED -> 0.0;
             case COLLECTING_DATA -> 20.0;
             case DETECTING_ANOMALY -> 40.0;
+            case MEMORY_ANALYSIS -> 50.0;
             case ANALYZING_RCA -> 60.0;
             case VALIDATING -> 80.0;
             case COMPLETED, HEALTHY -> 100.0;
@@ -76,6 +79,7 @@ public enum AnalysisStatus {
             case INITIATED -> "Initiated";
             case COLLECTING_DATA -> "Collecting Data";
             case DETECTING_ANOMALY -> "Detecting Anomaly";
+            case MEMORY_ANALYSIS -> "Memory Analysis";
             case ANALYZING_RCA -> "Analyzing Root Cause";
             case VALIDATING -> "Validating Results";
             case COMPLETED -> "Completed";
@@ -91,7 +95,7 @@ public enum AnalysisStatus {
      */
     public String getCssClass() {
         return switch (this) {
-            case INITIATED, COLLECTING_DATA, DETECTING_ANOMALY, ANALYZING_RCA, VALIDATING -> "status-in-progress";
+            case INITIATED, COLLECTING_DATA, MEMORY_ANALYSIS, DETECTING_ANOMALY, ANALYZING_RCA, VALIDATING -> "status-in-progress";
             case COMPLETED -> "status-completed";
             case FAILED -> "status-failed";
             case HEALTHY -> "status-healthy";

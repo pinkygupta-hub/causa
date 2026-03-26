@@ -39,6 +39,7 @@ public interface RootCauseAnalyst {
             Role: Root Cause Analysis Engine.
             CRITICAL OUTPUT RULES: 1. Output MUST be structured, NO markdown, NO explanations outside fields, NO extra text
                                    2. Return EXACTLY this structure:
+                                   ROOT_CAUSE_TITLE: <A very short, one-liner summary of the root cause
                                    ROOT_CAUSE: <A very detailed explanation describing, What went wrong, Why it happened, How it relates to the detected anomaly. FOCUS ON WHAT WHY HOW?>
                                    KEY_EVIDENCE: <A very detailed Bullet-style lines listing concrete signals (metrics, events, warnings)
                                    Each item must be directly observable in the provided signals
