@@ -103,7 +103,8 @@ public class RcaOrchestrator {
 
             // Store anomaly type in session for UI display
             trackingService.updateAnomalyType(sessionId, anomalyType);
-            highLevelIssue = rawAnomaly;
+            // Extract explanation from raw anomaly response
+            highLevelIssue = extractAnomalyExplanation(rawAnomaly);
 
             trackingService.recordStageEnd(sessionId, "anomaly_detection");
 
@@ -133,8 +134,9 @@ public class RcaOrchestrator {
                 String gcAnomalyType = parseGcAnomalyType(gcDetectionRaw);
 
                 LOG.info("Second-stage GC detection result: " + gcAnomalyType);
-                LOG.info("RAW GC Response: " + rawAnomaly);
+                LOG.info("RAW GC Response: " + gcDetectionRaw);
 
+                // Extract explanation from GC detection response
                 subLevelIssue = gcDetectionRaw;
 
                 LOG.info("Second-stage GC detection result: " + gcAnomalyType);
@@ -515,5 +517,42 @@ public class RcaOrchestrator {
         }
         
         return "NO_GC_ISSUE";
+    }
+
+    /**
+     * Extracts the explanation/description from the raw anomaly response.
+     * Looks for patterns like "EXPLANATION:" or descriptive text after the anomaly type.
+     */
+    private String extractAnomalyExplanation(String rawResponse) {
+        if (rawResponse == null || rawResponse.trim().isEmpty()) {
+            return "No explanation available";
+        }
+
+        // Try to extract EXPLANATION: section
+        Pattern explanationPattern = Pattern.compile(
+            "(?i)EXPLANATION\\s*:\\s*(.*?)(?=\\n\\n|$)",
+            Pattern.DOTALL
+        );
+        Matcher explanationMatcher = explanationPattern.matcher(rawResponse);
+        if (explanationMatcher.find()) {
+            return explanationMatcher.group(1).trim();
+        }
+
+        // Try to extract text after anomaly type (e.g., "HIGH_MEMORY: The system...")
+        Pattern afterTypePattern = Pattern.compile(
+            "(?i)(?:HIGH_MEMORY|GC_PAUSE|OOM_KILLED|CPU_THROTTLING|CRASH_LOOP|IMAGE_PULL_BACKOFF|NO_GC_ISSUE)\\s*[:\\-]\\s*(.*?)(?=\\n\\n|$)",
+            Pattern.DOTALL
+        );
+        Matcher afterTypeMatcher = afterTypePattern.matcher(rawResponse);
+        if (afterTypeMatcher.find()) {
+            return afterTypeMatcher.group(1).trim();
+        }
+
+        // If no pattern matches, return the full response cleaned up
+        String cleaned = rawResponse
+            .replaceAll("(?i)(HIGH_MEMORY|GC_PAUSE|OOM_KILLED|CPU_THROTTLING|CRASH_LOOP|IMAGE_PULL_BACKOFF|NO_GC_ISSUE|HEALTHY|OTHERS)\\s*[:\\-]?\\s*", "")
+            .trim();
+        
+        return cleaned.isEmpty() ? rawResponse.trim() : cleaned;
     }
 }
