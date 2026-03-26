@@ -154,5 +154,21 @@ public class CollectedArtifacts {
         }
         return sb.toString();
     }
+
+    /**
+     * Builds context with summarized logs for GC pause detection.
+     * Uses the summarized logs from LogOptimizer (not raw logs).
+     */
+    public String toSummarizedLogsContext() {
+        StringBuilder sb = new StringBuilder();
+        
+        sb.append("=SUMMARIZED_LOGS= ");
+        if (logs != null && logs.summarizedLogs != null && !logs.summarizedLogs.isEmpty()) {
+            sb.append(String.join("\n", logs.summarizedLogs));
+        }
+        sb.append("\n");
+        
+        return sb.toString();
+    }
 }
 

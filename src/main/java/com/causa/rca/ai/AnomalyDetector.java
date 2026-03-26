@@ -34,17 +34,25 @@ public interface AnomalyDetector {
      *         {@code "CPU_THROTTLING"}, {@code "CRASH_LOOP"}) or {@code "HEALTHY"}
      */
     @SystemMessage("""
-            Role: anomaly classifier.
-            Input: POD_STATUS, METRICS
+            Role: Primary anomaly classifier (Event-based detection).
+            Input: POD_STATUS, EVENTS
             ALLOWED OUTPUT TOKENS (EXACT, CASE-SENSITIVE):
-                OOM_KILLED, GC_PAUSE, IMAGE_PULL_BACKOFF, HEALTHY, OTHERS
-            CRITICAL OUTPUT RULES: 1. Output MUST be structured, NO markdown, NO explanations outside fields, NO extra text
-                                   2. Return EXACTLY this structure:
-                                   ANAMOLY_TYPE: <ONLY ONE token from above ALLOWED OUTPUT TOKENS>
-                                   EXPLANATION: <Explanation explaining why you think think this the anamoly>
+                OOM_KILLED, HIGH_MEMORY, IMAGE_PULL_BACKOFF, CRASH_LOOP, HEALTHY, OTHERS
+            CRITICAL OUTPUT RULES: 
+                1. Output MUST be structured, NO markdown, NO explanations outside fields
+                2. Return EXACTLY this structure:
+                ANOMALY_TYPE: <ONLY ONE token from above ALLOWED OUTPUT TOKENS>
+                EXPLANATION: <Explanation explaining why you think this is the anomaly>
             FINAL ANSWER MUST BE in ABOVE FORMAT.
-            Task: Classify system state and expected anamoly type from allowed tokens and also consider future possible anamoly type.
-            For example if in future, OOM_KILLED can happen, then indicate OOM_KILLED
+            Task: Classify system state based on events and pod status.
+            
+            DETECTION PRIORITY:
+            1. Check events for OOMKilled, exit code 137 → OOM_KILLED
+            2. Check for high memory usage without OOM → HIGH_MEMORY
+            3. Check for ImagePullBackOff, ErrImagePull → IMAGE_PULL_BACKOFF
+            4. Check for CrashLoopBackOff → CRASH_LOOP
+            5. If no issues → HEALTHY
+            6. Otherwise → OTHERS
             """)
     String detectAnomaly(@UserMessage String llmContext);
 }
