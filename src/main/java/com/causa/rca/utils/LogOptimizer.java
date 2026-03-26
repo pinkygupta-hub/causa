@@ -95,6 +95,8 @@ public class LogOptimizer {
         // 3. Build LLM-safe summary
         artifact.summary = buildLogSummary(rawLines, deduped);
 
+        // 4. Check for GC Logs
+        artifact.summarizedLogs = generateSummarizedLogsFromRawLogs(rawLines);
         return artifact;
     }
 
