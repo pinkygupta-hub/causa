@@ -189,32 +189,58 @@
                 <div id="sub-level-issue-text" style="display:none;">{session.report.subLevelIssue}</div>
             {/if}
 
-            <section class="details-section">
+            <section class="details-section" x-data="{ activeRcaTab: 'rca' }">
                 <div class="section-header">
                     <h2 class="section-title">
                         <span>Root Cause Analysis</span>
                         <button class="btn-copy-icon" onclick="copySection('issue-detected-section')" title="Copy Root Cause Analysis">📋</button>
                     </h2>
                 </div>
-                <div class="content-box issue-highlight">
-                    <h3 class="issue-title">{session.report.title}</h3>
-                    
+                
+                <!-- Sub-tab navigation for RCA -->
+                <nav class="sub-tab-nav">
+                    <button class="sub-tab-btn" :class="{ 'sub-tab-active': activeRcaTab === 'rca' }" @click="activeRcaTab = 'rca'">
+                        RCA Issue
+                    </button>
                     {#if session.report.highLevelIssue}
-                        <div class="issue-level-section">
-                            <h4 class="issue-level-title">High-Level Issue</h4>
+                        <button class="sub-tab-btn" :class="{ 'sub-tab-active': activeRcaTab === 'highlevel' }" @click="activeRcaTab = 'highlevel'">
+                            High Level Anomaly
+                        </button>
+                    {/if}
+                    {#if session.report.subLevelIssue}
+                        <button class="sub-tab-btn" :class="{ 'sub-tab-active': activeRcaTab === 'detailed' }" @click="activeRcaTab = 'detailed'">
+                            Detailed Issues
+                        </button>
+                    {/if}
+                </nav>
+
+                <!-- RCA Issue Sub-tab -->
+                <div x-show="activeRcaTab === 'rca'" class="sub-tab-content">
+                    <div class="content-box issue-highlight">
+                        <h3 class="issue-title">{session.report.title}</h3>
+                        <div class="issue-description">{session.report.issue}</div>
+                    </div>
+                </div>
+
+                <!-- High Level Anomaly Sub-tab -->
+                {#if session.report.highLevelIssue}
+                    <div x-show="activeRcaTab === 'highlevel'" class="sub-tab-content">
+                        <div class="content-box">
+                            <h4 class="issue-level-title">High-Level Anomaly Explanation</h4>
                             <div class="issue-level-description">{session.report.highLevelIssue}</div>
                         </div>
-                    {/if}
-                    
-                    {#if session.report.subLevelIssue}
-                        <div class="issue-level-section">
-                            <h4 class="issue-level-title">Sub-Level Issue</h4>
+                    </div>
+                {/if}
+
+                <!-- Detailed Issues Sub-tab -->
+                {#if session.report.subLevelIssue}
+                    <div x-show="activeRcaTab === 'detailed'" class="sub-tab-content">
+                        <div class="content-box">
+                            <h4 class="issue-level-title">Detailed Issue Analysis</h4>
                             <div class="issue-level-description">{session.report.subLevelIssue}</div>
                         </div>
-                    {/if}
-                    
-                    <div class="issue-description">{session.report.issue}</div>
-                </div>
+                    </div>
+                {/if}
             </section>
         {/if}
 
