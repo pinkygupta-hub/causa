@@ -15,16 +15,24 @@ TASK
 Extract the ISSUE and ASSERTIONS from the ROOT_CAUSE text.
 
 ISSUE RULE
+
 If the input contains:
 
 ROOT_CAUSE: <text>
 
-Extract ONLY the text after ROOT_CAUSE as "issueIdentified".
-Do NOT rewrite, summarize, or modify the sentence.
+Extract the COMPLETE ROOT_CAUSE text exactly as provided.
+
+- Include ALL sentences (multi-line if present)
+- Do NOT truncate to first sentence
+- Do NOT summarize
+- Do NOT rewrite
+- Preserve original wording exactly
+
+The issueIdentified must contain the FULL paragraph after ROOT_CAUSE.
 
 ASSERTION RULES
 
-Assertions must be SMALLER pieces of the ROOT_CAUSE sentence.
+Assertions must be SMALLER pieces of the ROOT_CAUSE text (may span multiple sentences).
 
 Important constraints:
 

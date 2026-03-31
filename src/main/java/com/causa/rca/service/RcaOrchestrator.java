@@ -488,15 +488,19 @@ public class RcaOrchestrator {
     private String extractRootCause(String rcaOutput) {
 
         Pattern pattern = Pattern.compile(
-                "(?i)ROOT[_ ]CAUSE\\s*:\\s*(.*?)(?=KEY[_ ]EVIDENCE\\s*:|SUPPORTED[_ ]LOGS\\s*:|$)",
-                Pattern.DOTALL);
+                "(?i)(ROOT_CAUSE_TITLE|ROOT[_ ]CAUSE)\\s*:\\s*(.*?)(?=\\n[A-Z_ ]+\\s*:|$)",
+                Pattern.DOTALL
+        );
 
         Matcher matcher = pattern.matcher(rcaOutput);
 
         if (matcher.find()) {
-            return matcher.group(1).trim();
+            LOG.info("Extracted RCA group1: " + matcher.group(1));
+            LOG.info("Extracted RCA group2: " + matcher.group(2));
+            return matcher.group(2).trim();
         }
 
+        LOG.warn("No RCA match found, returning full output");
         return rcaOutput.trim();
     }
 
